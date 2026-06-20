@@ -3,23 +3,16 @@ const jwt = require('jsonwebtoken');
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
-// 🟢 ให้ระบบหาชื่อ Model อัตโนมัติ (รองรับ User หรือ users)
-const UserModel = prisma.user || prisma.users;
-
-// ==========================================
-// 1. สมัครสมาชิก (Register)
-// ==========================================
 exports.register = async (req, res) => {
     try {
-        if (!UserModel) throw new Error("หาตาราง User ไม่เจอ");
         const { firstname, lastname, email, password, tel } = req.body;
-        const userExists = await UserModel.findFirst({ where: { email } });
+        const userExists = await prisma.user.findFirst({ where: { email } });
         if (userExists) return res.status(400).json({ message: "อีเมลนี้มีผู้ใช้งานแล้ว" });
 
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
-        await UserModel.create({
+        await prisma.user.create({
             data: { firstname, lastname, email, password: hashedPassword, tel, role: "user" }
         });
         res.json({ message: "สมัครสมาชิกสำเร็จ" });
@@ -28,54 +21,30 @@ exports.register = async (req, res) => {
     }
 };
 
-// ==========================================
-// 2. เข้าสู่ระบบ (Login)
-// ==========================================
 exports.login = async (req, res) => {
     try {
-        if (!UserModel) throw new Error("หาตาราง User ไม่เจอ");
         const { email, password } = req.body;
-        
-        const user = await UserModel.findFirst({ where: { email } });
-        if (!user) return res.status(400).json({ message: "ไม่พบผู้ใช้งานนี้ในระบบ" });
+        const user = await prisma.user.findFirst({ where: { email } });
+        if (!user) return res.status(400).json({ message: "อีเมลหรือรหัสผ่านไม่ถูกต้อง" }); 
 
-        // ตรวจสอบรหัสผ่านแบบ "ยืดหยุ่น" รองรับทั้งรหัสเข้ารหัส และรหัสข้อความธรรมดา
-        let isMatch = false;
-        try {
-            isMatch = await bcrypt.compare(password, user.password);
-        } catch (compareErr) {
-            console.log("Bcrypt compare failed, checking plain text...");
-        }
-        
-        if (!isMatch && password !== user.password) {
-            return res.status(400).json({ message: "รหัสผ่านไม่ถูกต้อง" });
-        }
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) return res.status(400).json({ message: "อีเมลหรือรหัสผ่านไม่ถูกต้อง" });
 
-        const payload = {
-            user: { id: user.id, email: user.email, role: user.role, firstname: user.firstname, lastname: user.lastname }
-        };
-
-        // 🎯 ล็อครหัสลับตายตัว ป้องกัน Error (ต้องตรงกับไฟล์ middleware)
-        const secret = 'MySecretKey1234'; 
-        
-        const token = jwt.sign(payload, secret, { expiresIn: "1d" });
-        res.json({ token, payload });
-
+        const payload = { user: { id: user.id, role: user.role, firstname: user.firstname } };
+        const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "1d" });
+        delete user.password;
+        res.json({ token, payload, user });
     } catch (err) {
-        console.error("Login Error:", err.message);
         res.status(500).json({ message: "Server Error: " + err.message });
     }
 };
 
-// ==========================================
-// 3. ตรวจสอบผู้ใช้ปัจจุบัน
-// ==========================================
+// 🟢 เพิ่มกลับมาให้แล้วครับ
 exports.currentUser = async (req, res) => {
     try {
-        const userId = req.body?.id || req.user?.id;
-        const user = await UserModel.findFirst({
-            where: { id: userId },
-            select: { id: true, firstname: true, lastname: true, email: true, role: true, tel: true, address: true }
+        const user = await prisma.user.findFirst({
+            where: { id: Number(req.user.id) },
+            select: { id: true, email: true, role: true, firstname: true, lastname: true }
         });
         res.json(user);
     } catch (err) {
@@ -83,29 +52,24 @@ exports.currentUser = async (req, res) => {
     }
 };
 
-// ==========================================
-// 4. ตรวจสอบสถานะแอดมิน
-// ==========================================
+// 🟢 เพิ่มกลับมาให้แล้วครับ
 exports.currentAdmin = async (req, res) => {
     try {
-        const userId = req.body?.id || req.user?.id;
-        const user = await UserModel.findFirst({
-            where: { id: userId },
-            select: { id: true, firstname: true, lastname: true, email: true, role: true }
+        const user = await prisma.user.findFirst({
+            where: { id: Number(req.user.id) },
+            select: { id: true, email: true, role: true, firstname: true, lastname: true }
         });
+        if (user.role !== 'admin') return res.status(403).json({ message: "Admin Access Denied" });
         res.json(user);
     } catch (err) {
         res.status(500).json({ message: "Server Error" });
     }
 };
 
-// ==========================================
-// 5. ดึงรายชื่อผู้ใช้ทั้งหมด
-// ==========================================
 exports.listUsers = async (req, res) => {
     try {
-        const users = await UserModel.findMany({
-            select: { id: true, firstname: true, lastname: true, email: true, role: true, tel: true, address: true, createdAt: true },
+        const users = await prisma.user.findMany({
+            select: { id: true, firstname: true, lastname: true, email: true, role: true, tel: true, createdAt: true },
             orderBy: { id: 'desc' }
         });
         res.json(users);
@@ -114,32 +78,27 @@ exports.listUsers = async (req, res) => {
     }
 };
 
-// ==========================================
-// 6. ลบผู้ใช้งาน
-// ==========================================
 exports.removeUser = async (req, res) => {
     try {
         const { id } = req.params;
-        await UserModel.delete({ where: { id: Number(id) } });
+        await prisma.user.delete({ where: { id: Number(id) } });
         res.json({ message: "ลบผู้ใช้งานสำเร็จ" });
     } catch (err) {
         res.status(500).json({ message: "ลบไม่ได้: มีข้อมูลออเดอร์ค้างอยู่" });
     }
 };
 
-// ==========================================
-// 7. อัปเดตข้อมูลผู้ใช้งาน
-// ==========================================
 exports.updateUser = async (req, res) => {
     try {
         const { id } = req.params;
-        const { role, firstname, lastname, tel, address } = req.body; 
-        const updatedUser = await UserModel.update({
+        const { role, firstname, lastname, tel } = req.body; 
+        const updatedUser = await prisma.user.update({
             where: { id: Number(id) },
-            data: { role, firstname, lastname, tel, address }
+            data: { role, firstname, lastname, tel }
         });
-        res.json(updatedUser);
+        delete updatedUser.password;
+        res.json({ message: "อัปเดตข้อมูลสำเร็จ", user: updatedUser });
     } catch (err) {
-        res.status(500).json({ message: "Server Error" });
+        res.status(500).json({ message: "อัปเดตไม่ได้: " + err.message });
     }
 };

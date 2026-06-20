@@ -6,6 +6,11 @@ import { ChevronLeft, Trash2, Minus, Plus, CreditCard, Banknote, Edit3, X, QrCod
 import Navbar from '../../components/Navbar';
 import Swal from 'sweetalert2';
 
+const ADDONS_LIST = [
+  { name: 'ไข่ดาว', price: 5 }, { name: 'ไข่เจียว', price: 5 },
+  { name: 'พิเศษ', price: 5 }, { name: 'เพิ่มข้าว', price: 5 }
+];
+
 export default function Cart() {
   const navigate = useNavigate();
   const [cartItems, setCartItems] = useState([]);
@@ -16,8 +21,12 @@ export default function Cart() {
   const [slipFile, setSlipFile] = useState(null);
   const [slipPreview, setSlipPreview] = useState(null);
   const slipInputRef = useRef(null);
-  
   const [qrSrc, setQrSrc] = useState(`${API_URL}/uploads/shop-qrcode.jpg`);
+
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editIndex, setEditIndex] = useState(null);
+  const [editAddons, setEditAddons] = useState([]);
+  const [editNote, setEditNote] = useState('');
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -25,7 +34,6 @@ export default function Cart() {
       Swal.fire('แจ้งเตือน', 'กรุณาเข้าสู่ระบบก่อนเข้าหน้าตะกร้าครับ', 'warning').then(() => navigate('/menu'));
       return;
     }
-
     const saved = localStorage.getItem('cart');
     if (saved) setCartItems(JSON.parse(saved));
     axios.get(`${API_URL}/api/shop`).then(res => setShopInfo(res.data)).catch(err => console.log(err));
@@ -38,23 +46,39 @@ export default function Cart() {
 
   const totalPrice = cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
 
-  // 🟢 ฟังก์ชันแก้ไข Add-ons โดยตรงจากตะกร้า
-  const handleEditNote = async (index, currentNote) => {
-    const { value: newNote } = await Swal.fire({
-      title: 'แก้ไขรายละเอียด',
-      input: 'text',
-      inputLabel: 'ตัวเลือกพิเศษ หรือ หมายเหตุ',
-      inputValue: currentNote,
-      showCancelButton: true,
-      confirmButtonText: 'บันทึก',
-      cancelButtonText: 'ยกเลิก'
+  const openEditModal = (index, item) => {
+    setEditIndex(index);
+    let noteText = item.note || '';
+    let currentAddons = [];
+    
+    ADDONS_LIST.forEach(addon => {
+        if (noteText.includes(addon.name)) {
+            currentAddons.push(addon.name);
+            noteText = noteText.replace(addon.name, '').replace('เพิ่ม:', '').replace('|', '').trim();
+        }
     });
+    noteText = noteText.replace(/,\s*/g, '').trim();
 
-    if (newNote !== undefined) {
-      const newCart = [...cartItems];
-      newCart[index].note = newNote;
-      saveCart(newCart);
-    }
+    setEditAddons(currentAddons);
+    setEditNote(noteText);
+    setEditModalOpen(true);
+  };
+
+  const saveEditDetails = () => {
+    const newCart = [...cartItems];
+    const item = newCart[editIndex];
+
+    const addonsText = editAddons.length > 0 ? `เพิ่ม: ${editAddons.join(', ')}` : '';
+    const finalNote = [addonsText, editNote].filter(Boolean).join(' | ');
+    const addonsPrice = editAddons.length * 5; 
+
+    let oldAddonsCount = 0;
+    ADDONS_LIST.forEach(a => { if (item.note && item.note.includes(a.name)) oldAddonsCount++; });
+    const basePrice = item.price - (oldAddonsCount * 5);
+
+    newCart[editIndex] = { ...item, note: finalNote, price: basePrice + addonsPrice };
+    saveCart(newCart);
+    setEditModalOpen(false);
   };
 
   const confirmOrder = async () => {
@@ -66,7 +90,6 @@ export default function Cart() {
       let payload;
       const headers = { Authorization: `Bearer ${token}` };
 
-      // แปลงข้อมูลส่ง Backend
       const formattedItems = cartItems.map(item => ({
         id: item.product_id || item.id, 
         product_id: item.product_id || item.id,
@@ -80,10 +103,10 @@ export default function Cart() {
       if (paymentMethod === 'transfer' && slipFile) {
         payload = new FormData();
         payload.append('items', JSON.stringify(formattedItems));
-        payload.append('totalPrice', totalPrice); 
+        payload.append('totalPrice', totalPrice);
         payload.append('totalAmount', totalPrice);
-        payload.append('orderType', 'online');
         payload.append('paymentMethod', paymentMethod);
+        payload.append('orderType', 'online');
         payload.append('note', overallNote);
         payload.append('slip', slipFile);
       } else {
@@ -91,8 +114,8 @@ export default function Cart() {
           items: formattedItems,
           totalPrice: totalPrice,
           totalAmount: totalPrice,
-          orderType: 'online',
           paymentMethod: paymentMethod,
+          orderType: 'online',
           note: overallNote
         };
       }
@@ -102,26 +125,14 @@ export default function Cart() {
       localStorage.removeItem('cart');
       setShowPaymentModal(false);
       setCartItems([]);
-      Swal.fire({ title: 'สำเร็จ!', text: 'ส่งคำสั่งซื้อเรียบร้อยแล้ว', icon: 'success', timer: 2000, showConfirmButton: false }).then(() => {
-        navigate('/status');
-      });
+      Swal.fire({ title: 'สำเร็จ!', text: 'ส่งคำสั่งซื้อเรียบร้อยแล้ว', icon: 'success', timer: 2000, showConfirmButton: false }).then(() => { navigate('/status'); });
     } catch (err) {
-      const errorMessage = err.response?.data?.message || 'เกิดข้อผิดพลาดในการสร้างออเดอร์';
-      Swal.fire('สั่งซื้อไม่สำเร็จ', errorMessage, 'error');
-    } finally { 
-      setIsSubmitting(false); 
-    }
+      Swal.fire('สั่งซื้อไม่สำเร็จ', err.response?.data?.message || 'เกิดข้อผิดพลาดในการสร้างออเดอร์', 'error');
+    } finally { setIsSubmitting(false); }
   };
 
   if (cartItems.length === 0) return ( 
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      <Navbar />
-      <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
-        <div className="w-24 h-24 bg-orange-50 rounded-full flex items-center justify-center mb-6"><ShoppingBag size={48} className="text-orange-300" /></div>
-        <h2 className="text-2xl font-black text-gray-800">ตะกร้าว่างเปล่า</h2>
-        <button onClick={() => navigate('/menu')} className="mt-8 px-8 py-3.5 bg-[#ea580c] text-white rounded-[16px] font-black shadow-md active:scale-95 transition-all">ไปเลือกอาหาร</button>
-      </div>
-    </div> 
+    <div className="min-h-screen bg-gray-50 flex flex-col"><Navbar /><div className="flex-1 flex flex-col items-center justify-center p-6 text-center"><div className="w-24 h-24 bg-orange-50 rounded-full flex items-center justify-center mb-6"><ShoppingBag size={48} className="text-orange-300" /></div><h2 className="text-2xl font-black text-gray-800">ตะกร้าว่างเปล่า</h2><button onClick={() => navigate('/menu')} className="mt-8 px-8 py-3.5 bg-[#ea580c] text-white rounded-[16px] font-black shadow-md active:scale-95 transition-all">ไปเลือกอาหาร</button></div></div> 
   );
 
   return (
@@ -144,13 +155,12 @@ export default function Cart() {
                   <button onClick={() => {if(window.confirm("ลบเมนูนี้?")) saveCart(cartItems.filter((_,i)=>i!==idx));}} className="text-gray-300 hover:text-red-500"><Trash2 size={16}/></button>
                </div>
                
-               {/* 🟢 ปุ่มกดเพื่อแก้ไข Note และ Add-ons */}
                {item.note ? (
-                 <button onClick={() => handleEditNote(idx, item.note)} className="text-[11px] text-orange-500 font-bold bg-orange-50 hover:bg-orange-100 px-2.5 py-1 rounded-md w-fit mt-1 flex items-center gap-1.5 cursor-pointer text-left transition-colors">
+                 <button onClick={() => openEditModal(idx, item)} className="text-[11px] text-orange-500 font-bold bg-orange-50 hover:bg-orange-100 px-2.5 py-1 rounded-md w-fit mt-1 flex items-center gap-1.5 cursor-pointer text-left transition-colors">
                    <Edit3 size={12}/> {item.note}
                  </button>
                ) : (
-                 <button onClick={() => handleEditNote(idx, '')} className="text-[11px] text-gray-400 font-medium bg-gray-50 hover:bg-gray-100 px-2.5 py-1 rounded-md w-fit mt-1 flex items-center gap-1.5 cursor-pointer transition-colors">
+                 <button onClick={() => openEditModal(idx, item)} className="text-[11px] text-gray-400 font-medium bg-gray-50 hover:bg-gray-100 px-2.5 py-1 rounded-md w-fit mt-1 flex items-center gap-1.5 cursor-pointer transition-colors">
                    <Plus size={12}/> เพิ่มรายละเอียด/ตัวเลือก
                  </button>
                )}
@@ -188,6 +198,37 @@ export default function Cart() {
           </div>
       </div>
 
+      {/* Modal แก้ไข Add-ons */}
+      {editModalOpen && (
+        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-[150] flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white w-full max-w-[420px] rounded-[24px] p-6 shadow-2xl relative animate-in zoom-in-95">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-[20px] font-black text-gray-900">แก้ไขรายละเอียด</h2>
+              <button onClick={() => setEditModalOpen(false)} className="p-2 bg-gray-100 hover:bg-gray-200 rounded-full text-gray-500 transition-colors"><X size={18}/></button>
+            </div>
+            <div className="mb-6 space-y-3">
+              <p className="text-[12px] font-bold text-gray-400 uppercase tracking-wide">ตัวเลือกพิเศษ (บวกเพิ่ม)</p>
+              <div className="grid grid-cols-2 gap-3">
+                {ADDONS_LIST.map((addon, i) => (
+                  <button key={i} onClick={() => setEditAddons(prev => prev.includes(addon.name) ? prev.filter(a => a !== addon.name) : [...prev, addon.name])} className={`flex justify-between border rounded-xl px-3 py-2.5 transition-all active:scale-95 ${editAddons.includes(addon.name) ? 'border-orange-500 bg-orange-50 text-orange-600' : 'border-gray-200 text-gray-600'}`}>
+                    <span className="text-[13px] font-bold">{addon.name}</span><span className="text-[12px]">+฿{addon.price}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="mb-8">
+              <p className="text-[12px] font-bold text-gray-400 uppercase tracking-wide mb-3">หมายเหตุอื่นๆ (ถ้ามี)</p>
+              <input type="text" value={editNote} onChange={e => setEditNote(e.target.value)} placeholder="เช่น ไม่เผ็ด, แยกน้ำ..." className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3.5 text-[14px] focus:outline-none focus:ring-1 focus:ring-orange-400 transition-all" />
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setEditModalOpen(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3.5 rounded-xl transition-all">ยกเลิก</button>
+              <button onClick={saveEditDetails} className="flex-1 bg-[#ea580c] hover:bg-orange-600 text-white font-bold py-3.5 rounded-xl transition-all shadow-sm">บันทึก</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal ชำระเงิน */}
       {showPaymentModal && (
         <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-white w-full max-w-[400px] rounded-[32px] overflow-hidden shadow-2xl flex flex-col animate-in zoom-in-95 max-h-[90vh]">
@@ -195,7 +236,6 @@ export default function Cart() {
               <h2 className="font-black text-gray-900 text-[18px]">ชำระเงินผ่านการโอน</h2>
               <button onClick={()=>setShowPaymentModal(false)} className="bg-white p-1.5 rounded-full text-gray-400 hover:text-gray-800 border shadow-sm transition-all"><X size={18}/></button>
             </div>
-            
             <div className="p-6 overflow-y-auto space-y-6 text-center">
               <div className="space-y-2">
                 <p className="text-[13px] font-bold text-gray-500">สแกน QR เพื่อโอนเงินเข้าบัญชีร้าน</p>
@@ -214,7 +254,6 @@ export default function Cart() {
                   />
                 </div>
               </div>
-              
               <div className="border-t border-gray-100 pt-6 text-left">
                 <p className="text-[13px] font-bold text-gray-700 mb-4">แนบหลักฐานการโอนเงิน (ไม่บังคับ)</p>
                 {!slipPreview ? (
@@ -228,7 +267,6 @@ export default function Cart() {
                 <input type="file" ref={slipInputRef} accept="image/*" className="hidden" onChange={(e)=>{const f=e.target.files[0]; if(f){setSlipFile(f); setSlipPreview(URL.createObjectURL(f));}}} />
               </div>
             </div>
-            
             <div className="p-5 bg-white border-t border-gray-100 shadow-[0_-10px_20px_rgba(0,0,0,0.03)]">
               <button onClick={confirmOrder} disabled={isSubmitting} className="w-full bg-[#ea580c] hover:bg-orange-600 text-white py-4 rounded-[16px] font-black text-[16px] shadow-lg shadow-orange-200 flex justify-center items-center gap-2 active:scale-95 transition-all">
                 {isSubmitting ? <Loader2 className="animate-spin"/> : "ยืนยันการแจ้งโอน"}

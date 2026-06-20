@@ -13,13 +13,14 @@ const Profile = () => {
   const [initialLoading, setInitialLoading] = useState(true);
   const token = localStorage.getItem('token');
 
-  // ✅ โหลดข้อมูลจาก Database ทันทีที่เข้าหน้า
   useEffect(() => {
     const fetchUserData = async () => {
       try {
-        const res = await axios.get(`${API_URL}/api/profile`, {
+        // 🟢 เปลี่ยนเส้นทางให้ตรงกับ Route Backend ปกติ
+        const res = await axios.get(`${API_URL}/api/user/profile`, {
          headers: { Authorization: `Bearer ${token}` }
-      });
+        });
+        
         if (res.data) {
            setFormData({
              firstname: res.data.firstname || '',
@@ -48,17 +49,26 @@ const Profile = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await axios.put(`${API_URL}/api/profile`, formData, {
+      // 🟢 ส่งข้อมูลไปยัง Endpoint ที่ถูกต้อง
+      const res = await axios.put(`${API_URL}/api/user/profile`, {
+        firstname: formData.firstname,
+        lastname: formData.lastname,
+        tel: formData.tel,
+        address: formData.address
+      }, {
         headers: { Authorization: `Bearer ${token}` }
-  });
-      localStorage.setItem('user', JSON.stringify(res.data.user));
+      });
+      
+      const updatedUser = res.data.user || res.data;
+      const oldStorage = JSON.parse(localStorage.getItem('user')) || {};
+      localStorage.setItem('user', JSON.stringify({ ...oldStorage, ...updatedUser }));
+      
       window.dispatchEvent(new Event('auth-update')); 
       
-      // 🟢 ใช้ Swal เมื่อบันทึกสำเร็จ
-      Swal.fire({ title: 'สำเร็จ!', text: 'บันทึกข้อมูลสำเร็จ!', icon: 'success', timer: 1500, showConfirmButton: false });
+      Swal.fire({ title: 'สำเร็จ!', text: 'บันทึกข้อมูลส่วนตัวเรียบร้อยแล้ว!', icon: 'success', timer: 2000, showConfirmButton: false });
     } catch (err) {
-      // 🟢 ใช้ Swal เมื่อเกิดข้อผิดพลาด
-      Swal.fire('เกิดข้อผิดพลาด', err.response?.data?.message || err.message, 'error');
+      console.error("Update error", err.response?.data);
+      Swal.fire('เกิดข้อผิดพลาด', err.response?.data?.message || 'ไม่สามารถบันทึกข้อมูลได้', 'error');
     } finally {
       setLoading(false);
     }
@@ -73,7 +83,7 @@ const Profile = () => {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <Navbar />
-      <div className="flex-1 p-4 md:p-8 max-w-3xl mx-auto w-full">
+      <div className="flex-1 p-4 md:p-8 max-w-3xl mx-auto w-full animate-in fade-in">
         <div className="flex items-center gap-4 mb-8">
             <div className="w-16 h-16 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center border border-orange-200 shadow-sm">
                 <User size={32}/>
@@ -96,26 +106,26 @@ const Profile = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                     <label className="text-sm font-bold text-gray-700 mb-2 block">ชื่อจริง</label>
-                    <input name="firstname" value={formData.firstname} onChange={handleChange} className="w-full bg-white border border-gray-200 rounded-xl p-3 focus:ring-2 focus:ring-orange-200 outline-none transition-all font-medium" placeholder="ระบุชื่อ" />
+                    <input name="firstname" value={formData.firstname} onChange={handleChange} className="w-full bg-white border border-gray-200 rounded-xl p-3 focus:ring-2 focus:ring-orange-200 outline-none transition-all font-medium" placeholder="ระบุชื่อจริง" required />
                 </div>
                 <div>
                     <label className="text-sm font-bold text-gray-700 mb-2 block">นามสกุล</label>
-                    <input name="lastname" value={formData.lastname} onChange={handleChange} className="w-full bg-white border border-gray-200 rounded-xl p-3 focus:ring-2 focus:ring-orange-200 outline-none transition-all font-medium" placeholder="ระบุนามสกุล" />
+                    <input name="lastname" value={formData.lastname} onChange={handleChange} className="w-full bg-white border border-gray-200 rounded-xl p-3 focus:ring-2 focus:ring-orange-200 outline-none transition-all font-medium" placeholder="ระบุนามสกุล" required />
                 </div>
             </div>
 
             <div>
-                <label className="text-sm font-bold text-gray-700 mb-2 block flex items-center gap-2">
+                <label className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
                     <Phone size={16} className="text-orange-500"/> เบอร์โทรศัพท์
                 </label>
-                <input name="tel" value={formData.tel} onChange={handleChange} className="w-full bg-white border border-gray-200 rounded-xl p-3 focus:ring-2 focus:ring-orange-200 outline-none transition-all font-medium" placeholder="08x-xxx-xxxx" />
+                <input name="tel" value={formData.tel} onChange={handleChange} className="w-full bg-white border border-gray-200 rounded-xl p-3 focus:ring-2 focus:ring-orange-200 outline-none transition-all font-medium" placeholder="08x-xxx-xxxx" required />
             </div>
 
             <div>
-                <label className="text-sm font-bold text-gray-700 mb-2 block flex items-center gap-2">
-                    <MapPin size={16} className="text-orange-500"/> ที่อยู่จัดส่ง
+                <label className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
+                    <MapPin size={16} className="text-orange-500"/> ที่อยู่จัดส่ง (ถ้ามี)
                 </label>
-                <textarea name="address" value={formData.address} onChange={handleChange} rows="3" className="w-full bg-white border border-gray-200 rounded-xl p-3 focus:ring-2 focus:ring-orange-200 outline-none transition-all resize-none font-medium" placeholder="กรุณากรอกที่อยู่" />
+                <textarea name="address" value={formData.address} onChange={handleChange} rows="3" className="w-full bg-white border border-gray-200 rounded-xl p-3 focus:ring-2 focus:ring-orange-200 outline-none transition-all resize-none font-medium" placeholder="กรอกรายละเอียดที่อยู่จัดส่ง..." />
             </div>
 
             <button type="submit" disabled={loading} className="w-full bg-gradient-to-r from-orange-500 to-red-600 text-white font-black py-4 rounded-2xl shadow-lg shadow-orange-100 hover:shadow-xl hover:scale-[1.01] active:scale-[0.98] transition-all flex justify-center items-center gap-3 mt-4">

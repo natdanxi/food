@@ -7,15 +7,24 @@ const { auth } = require('../middleware/auth');
 // 1. ดึงออเดอร์ทั้งหมด
 router.get('/orders', auth, async (req, res) => {
     try {
+        // รวมข้อมูล payments ด้วย เพื่อให้สามารถเข้าถึงสลิปโอนเงินได้
         const orders = await prisma.order.findMany({
             include: {
                 user: { select: { firstname: true, lastname: true, tel: true } },
-                items: { include: { product: true } }
+                items: { include: { product: true } },
+                payments: true
             },
             // 🟢 แก้จาก id เป็น ordersId
-            orderBy: { ordersId: 'desc' } 
+            orderBy: { ordersId: 'desc' }
         });
-        res.json(orders);
+
+        // แนบ slipImage มาให้อยู่บน root ของ order เพื่อให้ frontend ใช้งานง่าย
+        const formatted = orders.map(o => {
+            const slip = Array.isArray(o.payments) && o.payments.length ? (o.payments[0].slipImage || o.payments[0].slip_image) : null;
+            return { ...o, slipImage: slip };
+        });
+
+        res.json(formatted);
     } catch (err) {
         console.error(err);
         res.status(500).json({ message: "Server Error" });

@@ -1,29 +1,7 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
-const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        const dir = 'uploads/';
-        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-        cb(null, dir);
-    },
-    filename: (req, file, cb) => {
-        // 🟢 ให้รูป QR บันทึกเป็นชื่อคงที่ เพื่อให้เรียกใช้จากไฟล์ได้เลยโดยไม่ต้องเก็บลง DB
-        if (file.fieldname === 'qrCode') {
-            cb(null, `shop-qrcode${path.extname(file.originalname)}`);
-        } else {
-            cb(null, `shop-${file.fieldname}-${Date.now()}${path.extname(file.originalname)}`);
-        }
-    }
-});
-
-const upload = multer({ storage }).fields([
-    { name: 'logo', maxCount: 1 },
-    { name: 'qrCode', maxCount: 1 }
-]);
 
 exports.getShopInfo = async (req, res) => {
     try {
@@ -41,49 +19,50 @@ exports.getShopInfo = async (req, res) => {
     }
 };
 
-exports.updateShopInfo = async (req, res) => {
-    upload(req, res, async (err) => {
-        if (err) return res.status(400).json({ message: "อัปโหลดไฟล์ล้มเหลว" });
+// ✨ แก้ชื่อเป็น updateShop และถอดระบบอัปโหลดไปไว้ที่ Middleware แทนแล้ว
+exports.updateShop = async (req, res) => {
+    try {
+        const { name, phone, address, openTime, closeTime, isOpen, removeLogo, removeQrCode } = req.body;
         
-        try {
-            const { name, phone, address, openTime, closeTime, isOpen, removeLogo, removeQrCode } = req.body;
-            
-            let shop = await prisma.shopInfo.findFirst();
-            if (!shop) {
-                shop = await prisma.shopInfo.create({ 
-                    data: { shopName: name || "ร้านอาหารแม่ครัวตัวกลม" } 
-                });
-            }
-
-            const data = {
-                shopName: name || shop.shopName,
-                phone: phone || shop.phone,
-                address: address || shop.address,
-                openTime: openTime || shop.openTime,
-                closeTime: closeTime || shop.closeTime,
-                isOpen: isOpen !== undefined ? isOpen === 'true' : shop.isOpen 
-            };
-
-            if (req.files?.logo) data.logo = req.files['logo'][0].filename;
-            else if (removeLogo === 'true') data.logo = null;
-
-            // 🟢 หากกดลบรูป QR ให้ลบไฟล์ออกจากเครื่อง Server เลย
-            if (removeQrCode === 'true') {
-                const qrFiles = fs.readdirSync('uploads/').filter(fn => fn.startsWith('shop-qrcode'));
-                qrFiles.forEach(file => fs.unlinkSync(path.join('uploads/', file)));
-            }
-
-            const updatedShop = await prisma.shopInfo.update({
-                where: { shopId: shop.shopId }, // 🟢 สำคัญ! ใช้ shopId
-                data: data
+        let shop = await prisma.shopInfo.findFirst();
+        if (!shop) {
+            shop = await prisma.shopInfo.create({ 
+                data: { shopName: name || "ร้านอาหารแม่ครัวตัวกลม" } 
             });
-
-            res.json(updatedShop);
-        } catch (error) {
-            console.error("Update Shop Error:", error);
-            res.status(500).json({ message: "บันทึกข้อมูลไม่สำเร็จ", error: error.message });
         }
-    });
+
+        const data = {
+            shopName: name || shop.shopName,
+            phone: phone || shop.phone,
+            address: address || shop.address,
+            openTime: openTime || shop.openTime,
+            closeTime: closeTime || shop.closeTime,
+            isOpen: isOpen !== undefined ? isOpen === 'true' : shop.isOpen 
+        };
+
+        // 🟢 รูปภาพจะถูกส่งมาจาก Middleware (upload.js) แล้วมาอยู่ใน req.files
+        if (req.files && req.files['logo']) {
+            data.logo = req.files['logo'][0].filename;
+        } else if (removeLogo === 'true') {
+            data.logo = null;
+        }
+
+        // 🟢 หากกดลบรูป QR ให้ลบไฟล์ออกจากเครื่อง Server เลย
+        if (removeQrCode === 'true') {
+            const qrFiles = fs.readdirSync('uploads/').filter(fn => fn.startsWith('shop-qrcode'));
+            qrFiles.forEach(file => fs.unlinkSync(path.join('uploads/', file)));
+        }
+
+        const updatedShop = await prisma.shopInfo.update({
+            where: { shopId: shop.shopId }, // 🟢 สำคัญ! ใช้ shopId
+            data: data
+        });
+
+        res.json(updatedShop);
+    } catch (error) {
+        console.error("Update Shop Error:", error);
+        res.status(500).json({ message: "บันทึกข้อมูลไม่สำเร็จ", error: error.message });
+    }
 };
 
 exports.checkShopStatus = async (req, res) => {

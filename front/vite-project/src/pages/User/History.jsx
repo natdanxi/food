@@ -4,12 +4,13 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { API_URL } from '../../api';
 import Navbar from '../../components/Navbar'; 
+import Swal from 'sweetalert2';
 
 const History = () => {
   const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('completed');
+  const [activeTab, setActiveTab] = useState('all');
   
   const token = localStorage.getItem('token');
 
@@ -30,33 +31,38 @@ const History = () => {
     if(token) fetchHistory();
   }, [token]);
 
-  const getSafeImageUrl = (imagePath) => {
-    if (!imagePath) return null;
-    if (imagePath.startsWith('http') || imagePath.startsWith('data:')) return imagePath;
-    const filename = imagePath.split('/').pop();
-    return `${API_URL}/uploads/${filename}`;
-  };
-
+  // 🟢 แก้ไข: ฟังก์ชันสั่งซื้ออีกครั้ง ไม่ทำการ Navigate แล้ว ให้เด้งแค่ Popup
   const handleReorder = (order) => {
     let currentCart = JSON.parse(localStorage.getItem('cart') || '[]');
+    
     order.items.forEach(item => {
-      const existingItemIndex = currentCart.findIndex(cartItem => cartItem.id === item.product?.id);
+      const prodId = item.product?.productId || item.productId || item.product?.id;
+      const existingItemIndex = currentCart.findIndex(cartItem => cartItem.product_id === prodId);
+      
       if (existingItemIndex > -1) {
         currentCart[existingItemIndex].quantity += item.quantity;
       } else if (item.product) {
         currentCart.push({
-          id: item.product.id,
+          id: prodId,
+          product_id: prodId,
+          title: item.product.title || item.product.name,
           name: item.product.title || item.product.name,
-          price: item.price || item.product.price,
-          image: getSafeImageUrl(item.product.images || item.product.image), 
+          price: item.unitPrice || item.price || item.product.price,
+          image: item.product.image || item.product.images, 
           quantity: item.quantity,
-          note: ''
+          note: item.note || ''
         });
       }
     });
+    
     localStorage.setItem('cart', JSON.stringify(currentCart));
     window.dispatchEvent(new Event('storage')); 
-    navigate('/cart');
+    
+    // 🟢 แจ้งเตือนเสร็จแล้วจบ ไม่เปลี่ยนหน้า
+    Swal.fire({
+      toast: true, position: 'top-end', icon: 'success', 
+      title: 'เพิ่มเมนูลงตะกร้าแล้ว!', showConfirmButton: false, timer: 1500
+    });
   };
 
   const filteredOrders = orders.filter(order => {
@@ -114,15 +120,16 @@ const History = () => {
         ) : (
           <div className="space-y-3">
             {filteredOrders.map(order => {
+              const currentId = order.ordersId || order.id;
               const statusDisplay = getStatusDisplay(order.status);
               
               return (
-                <div key={order.id} className={`bg-white rounded-xl shadow-sm border overflow-hidden ${order.status === 'cancelled' ? 'border-red-200' : 'border-gray-200'}`}>
+                <div key={currentId} className={`bg-white rounded-xl shadow-sm border overflow-hidden ${order.status === 'cancelled' ? 'border-red-200' : 'border-gray-200'}`}>
                   
                   <div className="flex justify-between items-center p-3 sm:p-4 border-b border-gray-100">
                     <div className="flex items-center gap-2">
                       <Store size={18} className="text-gray-600" />
-                      <span className="font-bold text-gray-800 text-sm">แม่ครัวตัวกลม <span className="text-gray-400 font-medium text-xs ml-1">(#{order.id})</span></span>
+                      <span className="font-bold text-gray-800 text-sm">แม่ครัวตัวกลม <span className="text-gray-400 font-medium text-xs ml-1">(#{currentId})</span></span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <span className={`text-sm font-bold ${statusDisplay.color}`}>
@@ -131,20 +138,21 @@ const History = () => {
                     </div>
                   </div>
 
-                  {/* 🔴 ถ้าถูกยกเลิกให้แสดงเหตุผล */}
                   {order.status === 'cancelled' && (
                     <div className="bg-red-50 px-3 sm:px-4 py-3 border-b border-red-100 flex items-start gap-2">
                       <XCircle size={16} className="text-red-500 shrink-0 mt-0.5" />
                       <div>
                         <span className="text-xs font-bold text-red-700 block">เหตุผลที่ถูกยกเลิก:</span>
-                        <span className="text-xs text-red-600">{order.rejectReason || 'ร้านค้าปฏิเสธคำสั่งซื้อ (ไม่ได้ระบุเหตุผล)'}</span>
+                        <span className="text-xs text-red-600">{order.rejectReason || 'ไม่ได้ระบุเหตุผล'}</span>
                       </div>
                     </div>
                   )}
 
                   <div className={`bg-gray-50/50 p-3 sm:p-4 space-y-3 ${order.status === 'cancelled' ? 'opacity-70 grayscale' : ''}`}>
                     {order.items.map((item, idx) => {
-                      const imageSrc = getSafeImageUrl(item.product?.images || item.product?.image);
+                      const imageName = item.product?.image || item.product?.images;
+                      const imageSrc = imageName ? `${API_URL}/uploads/${imageName}` : null;
+                      
                       return (
                         <div key={idx} className="flex gap-3">
                           <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gray-200 rounded-md border border-gray-200 overflow-hidden shrink-0 flex items-center justify-center">
@@ -161,7 +169,7 @@ const History = () => {
                                 <span className="font-medium text-gray-800 text-sm sm:text-base line-clamp-1">{item.product?.title || item.product?.name || 'เมนูที่ถูกลบ'}</span>
                                 {item.note && <span className="text-[11px] text-gray-500 mt-0.5 block line-clamp-1">↳ {item.note}</span>}
                               </div>
-                              <span className="text-sm text-gray-800 font-medium shrink-0">฿{item.price || item.product?.price || 0}</span>
+                              <span className="text-sm text-gray-800 font-medium shrink-0">฿{item.unitPrice || item.price || item.product?.price || 0}</span>
                             </div>
                             <div className="text-xs text-gray-500 mt-1 font-bold">x{item.quantity}</div>
                           </div>
@@ -176,13 +184,13 @@ const History = () => {
                     </span>
                     <div className="text-right">
                       <span className="text-sm text-gray-600 mr-2">ยอดคำสั่งซื้อทั้งหมด:</span>
-                      <span className={`text-lg font-bold ${order.status === 'cancelled' ? 'text-gray-500 line-through' : 'text-orange-600'}`}>฿{order.totalAmount}</span>
+                      <span className={`text-lg font-bold ${order.status === 'cancelled' ? 'text-gray-500 line-through' : 'text-orange-600'}`}>฿{order.totalPrice || order.totalAmount}</span>
                     </div>
                   </div>
 
                   <div className="border-t border-gray-100 p-3 sm:p-4 flex flex-col sm:flex-row justify-between items-center gap-3 bg-white">
                     <span className="text-xs text-gray-400 order-2 sm:order-1">
-                      สั่งเมื่อ: {new Date(order.createdAt).toLocaleString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} น.
+                      สั่งเมื่อ: {new Date(order.createdAt || order.orderDate).toLocaleString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} น.
                     </span>
                     
                     <div className="flex gap-2 w-full sm:w-auto order-1 sm:order-2">

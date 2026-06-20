@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { ChefHat, Clock, CheckCircle, Utensils, Loader2, ArrowRight, Receipt, XCircle, X } from 'lucide-react';
+import { ChefHat, Clock, CheckCircle, Utensils, Loader2, ArrowRight, Receipt, XCircle, X, ReceiptText } from 'lucide-react';
 import axios from 'axios';
 import { API_URL } from '../../api';
 import Navbar from '../../components/Navbar';
@@ -17,57 +17,67 @@ const OrderStatus = () => {
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [orderToCancel, setOrderToCancel] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
-
-  // 🟢 ใช้ useRef เพื่อเก็บสถานะเก่า ไว้เปรียบเทียบหาการเปลี่ยนแปลง
+  
+  const [receiptOrder, setReceiptOrder] = useState(null);
   const prevStatusRef = useRef({});
+
+  const showNotification = (title, message) => {
+    const audio = new Audio('https://www.soundjay.com/buttons/sounds/button-09.mp3');
+    audio.play().catch(() => {});
+
+    Swal.fire({
+      toast: true, position: 'bottom-start', showConfirmButton: false, timer: 5000, timerProgressBar: true, background: '#ffffff',
+      html: `
+        <div style="display: flex; align-items: center; gap: 14px; padding: 4px;">
+          <div style="width: 48px; height: 48px; background: #ea580c; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; flex-shrink: 0; box-shadow: 0 4px 10px rgba(234, 88, 12, 0.3);">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg>
+          </div>
+          <div style="text-align: left;">
+            <p style="margin: 0; font-weight: 900; font-size: 15px; color: #1f2937;">${title}</p>
+            <p style="margin: 0; font-size: 13px; color: #6b7280; margin-top: 2px;">${message}</p>
+          </div>
+        </div>
+      `,
+      didOpen: (toast) => {
+        toast.addEventListener('mouseenter', Swal.stopTimer);
+        toast.addEventListener('mouseleave', Swal.resumeTimer);
+      }
+    });
+  };
 
   const fetchStatus = useCallback(async () => {
     try {
-      // ⚠️ ถ้าครั้งแรกยังโหลดอยู่ ให้คงสถานะ loading ไว้
-      const res = await axios.get(`${API_URL}/api/user/history`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const today = new Date().toDateString();
-      const activeOrders = res.data.filter(o => {
-          if (o.status?.toLowerCase() === 'completed') return false;
-          if (o.status?.toLowerCase() === 'cancelled') return new Date(o.createdAt).toDateString() === today; 
-          return true;
-      });
+      const res = await axios.get(`${API_URL}/api/user/history`, { headers: { Authorization: `Bearer ${token}` } });
+      const activeOrders = res.data.filter(o => o.status?.toLowerCase() === 'pending' || o.status?.toLowerCase() === 'cooking');
+      const sortedOrders = activeOrders.sort((a, b) => (b.ordersId || b.id) - (a.ordersId || a.id));
       
-      const sortedOrders = activeOrders.sort((a, b) => b.id - a.id);
       setOrders(sortedOrders);
 
-      // 🟢 ตรวจสอบสถานะว่าเปลี่ยนไปหรือไม่ เพื่อแสดงแจ้งเตือน
-      sortedOrders.forEach(order => {
-        const prevStatus = prevStatusRef.current[order.id];
+      res.data.forEach(order => {
+        const currentId = order.ordersId || order.id;
+        const prevStatus = prevStatusRef.current[currentId];
+        
         if (prevStatus && prevStatus !== order.status) {
-            if (order.status === 'cooking') {
-                Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'แม่ครัวรับออเดอร์แล้ว! กำลังเตรียมอาหารค่ะ', showConfirmButton: false, timer: 4000 });
-            } else if (order.status === 'completed') {
-                Swal.fire({ title: 'อาหารเสร็จแล้ว!', text: `ออเดอร์ #${order.id} พร้อมเสิร์ฟค่ะ`, icon: 'success', confirmButtonText: 'รับทราบ', confirmButtonColor: '#ea580c' });
-            }
+            if (order.status === 'cooking') showNotification(`อัปเดตคิว #${currentId}`, 'แม่ครัวรับออเดอร์แล้ว! กำลังเตรียมอาหารค่ะ 🍳');
+            else if (order.status === 'completed') showNotification(`คิว #${currentId} เสร็จแล้ว!`, 'อาหารของคุณพร้อมเสิร์ฟ/จัดส่งแล้วค่ะ 🎉');
+            else if (order.status === 'cancelled') showNotification(`คิว #${currentId} ถูกยกเลิก`, 'ขออภัยค่ะ คำสั่งซื้อของคุณถูกยกเลิก ❌');
         }
-        prevStatusRef.current[order.id] = order.status;
+        prevStatusRef.current[currentId] = order.status;
       });
-
-    } catch (err) { 
-        console.error("Fetch Status Error:", err); 
-    } finally { 
-        setLoading(false); 
-    }
+    } catch (err) { console.error("Fetch Status Error:", err); } finally { setLoading(false); }
   }, [token]);
 
   useEffect(() => {
     fetchStatus();
-    const interval = setInterval(fetchStatus, 3000); 
+    const interval = setInterval(fetchStatus, 5000); 
     return () => clearInterval(interval);
   }, [fetchStatus]);
 
   useEffect(() => {
-    if (cancelModalOpen) document.body.style.overflow = 'hidden';
+    if (cancelModalOpen || receiptOrder) document.body.style.overflow = 'hidden';
     else document.body.style.overflow = 'auto';
     return () => { document.body.style.overflow = 'auto'; };
-  }, [cancelModalOpen]);
+  }, [cancelModalOpen, receiptOrder]);
 
   const openCancelModal = (orderId) => {
     setOrderToCancel(orderId);
@@ -78,15 +88,13 @@ const OrderStatus = () => {
   const confirmCancelOrder = async () => {
     try {
       await axios.put(`${API_URL}/api/user/cancel-order`, {
-        id: orderToCancel,
-        rejectReason: `[ลูกค้ายกเลิกเอง] ${cancelReason || 'ไม่ระบุเหตุผล'}` 
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+        id: orderToCancel, rejectReason: `[ลูกค้ายกเลิกเอง] ${cancelReason || 'ไม่ระบุเหตุผล'}` 
+      }, { headers: { Authorization: `Bearer ${token}` } });
+      
       fetchStatus(); 
       setCancelModalOpen(false);
       setOrderToCancel(null);
-      Swal.fire({ title: 'สำเร็จ', text: 'ยกเลิกคำสั่งซื้อเรียบร้อยแล้ว', icon: 'success', timer: 1500, showConfirmButton: false });
+      Swal.fire({ title: 'สำเร็จ', text: 'ยกเลิกคำสั่งซื้อเรียบร้อยแล้ว ออเดอร์จะถูกย้ายไปที่ประวัติ', icon: 'success', timer: 2000, showConfirmButton: false });
     } catch (err) {
       Swal.fire('เกิดข้อผิดพลาด', err.response?.data?.message || 'ไม่สามารถยกเลิกคำสั่งซื้อได้', 'error');
     }
@@ -131,9 +139,11 @@ const OrderStatus = () => {
     <div className="min-h-screen bg-gray-50/50 font-sans">
       <Navbar />
       <div className="p-4 md:p-6 max-w-lg mx-auto pb-24 relative">
-        <div className="mb-6">
-            <h2 className="text-2xl font-black text-gray-800 flex items-center gap-3">
-                <span className="bg-orange-100 p-2 rounded-xl text-orange-600"><Clock size={24}/></span>
+        
+        {/* 🟢 นำคำว่าดูประวัติทั้งหมดออกแล้ว */}
+        <div className="mb-6 flex flex-row items-center justify-between gap-2">
+            <h2 className="text-xl sm:text-2xl font-black text-gray-800 flex items-center gap-2 sm:gap-3">
+                <span className="bg-orange-100 p-2 rounded-xl text-orange-600 shrink-0"><Clock size={24}/></span>
                 สถานะคำสั่งซื้อ
             </h2>
         </div>
@@ -145,74 +155,53 @@ const OrderStatus = () => {
                 <div className="w-24 h-24 bg-green-50 rounded-full flex items-center justify-center mb-6 border-4 border-white shadow-sm"><CheckCircle size={48} className="text-green-500"/></div>
                 <h3 className="text-xl font-bold text-gray-800">ไม่มีคิวที่รออยู่</h3>
                 <p className="text-gray-400 mt-2 mb-8 text-sm">อาหารได้รับครบแล้ว หรือคุณยังไม่ได้สั่งครับ</p>
-                <button onClick={() => navigate('/menu')} className="w-full py-4 bg-gray-800 text-white rounded-2xl font-bold hover:bg-black transition-all shadow-lg flex justify-center items-center gap-2 active:scale-95">สั่งอาหารเพิ่ม <ArrowRight size={20}/></button>
+                <div className="flex flex-col gap-3 w-full">
+                    <button onClick={() => navigate('/menu')} className="w-full py-4 bg-[#ea580c] text-white rounded-2xl font-bold hover:bg-orange-600 transition-all shadow-lg shadow-orange-200 flex justify-center items-center gap-2 active:scale-95">สั่งอาหาร <ArrowRight size={20}/></button>
+                </div>
             </div>
          ) : (
             <div className="space-y-6">
                 {orders.map((order, idx) => {
-                    const cleanReason = order.rejectReason ? order.rejectReason.replace('[ลูกค้ายกเลิกเอง] ', '') : '';
+                    const currentId = order.ordersId || order.id;
                     
                     return (
-                    <div key={order.id} className={`bg-white p-6 rounded-[32px] shadow-sm border relative overflow-hidden animate-in slide-in-from-bottom-4 duration-500 ${order.status === 'cancelled' ? 'border-red-200' : 'border-gray-100'}`} style={{animationDelay: `${idx * 100}ms`}}>
+                    <div key={currentId} className={`bg-white p-6 rounded-[32px] shadow-sm border relative overflow-hidden animate-in slide-in-from-bottom-4 duration-500 border-gray-100`} style={{animationDelay: `${idx * 100}ms`}}>
                         <div className="flex justify-between items-start mb-6">
                             <div className="flex items-center gap-4">
-                                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-black text-xl border ${order.status === 'cancelled' ? 'bg-red-50 text-red-500 border-red-100' : 'bg-orange-50 text-orange-500 border-orange-100'}`}>#{order.id}</div>
+                                <div className="w-14 h-14 rounded-2xl flex items-center justify-center font-black text-xl border bg-orange-50 text-orange-500 border-orange-100">#{currentId}</div>
                                 <div>
                                     <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">เวลาสั่งซื้อ</p>
-                                    <p className="text-lg font-bold text-gray-800">{new Date(order.createdAt).toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'})} น.</p>
+                                    <p className="text-lg font-bold text-gray-800">{new Date(order.createdAt || order.orderDate).toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'})} น.</p>
                                 </div>
                             </div>
-                            <div className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm border ${order.status === 'cancelled' ? 'bg-red-50 text-red-600 border-red-100' : order.status === 'cooking' ? 'bg-blue-50 text-blue-600 border-blue-100 animate-pulse' : 'bg-yellow-50 text-yellow-600 border-yellow-100'}`}>
-                                {order.status === 'cancelled' ? 'ถูกยกเลิก' : order.status === 'cooking' ? 'กำลังปรุง' : 'รอรับออเดอร์'}
+                            <div className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm border ${order.status === 'cooking' ? 'bg-blue-50 text-blue-600 border-blue-100 animate-pulse' : 'bg-yellow-50 text-yellow-600 border-yellow-100'}`}>
+                                {order.status === 'cooking' ? 'กำลังปรุง' : 'รอรับออเดอร์'}
                             </div>
                         </div>
 
-                        {order.status === 'cancelled' ? (
-                          <div className="bg-red-50 border border-red-100 rounded-2xl p-4 mb-6 flex items-start gap-3">
-                              <XCircle size={24} className="text-red-500 shrink-0"/>
-                              <div>
-                                  <h4 className="text-sm font-bold text-red-700">คำสั่งซื้อนี้ถูกยกเลิกแล้ว</h4>
-                                  <p className="text-xs text-red-600 mt-1">เหตุผล: {cleanReason || 'ร้านไม่สามารถรับออเดอร์ได้ในขณะนี้'}</p>
-                              </div>
-                          </div>
-                        ) : ( <OrderProgress status={order.status} /> )}
-
-                        <div className={`rounded-2xl p-4 border ${order.status === 'cancelled' ? 'bg-gray-50/30 border-gray-100 opacity-60 grayscale' : 'bg-gray-50/50 border-gray-100'}`}>
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1 mb-3"><Utensils size={12}/> รายการอาหาร</p>
-                            <div className="space-y-3">
-                                {order.items.map((item, i) => (
-                                    <div key={i} className="flex justify-between items-start text-sm">
-                                        <div className="flex gap-3">
-                                            <span className={`text-white font-bold w-5 h-5 rounded flex items-center justify-center text-[10px] shadow-sm mt-0.5 ${order.status === 'cancelled' ? 'bg-gray-400' : 'bg-orange-500'}`}>{item.quantity}</span>
-                                            <div>
-                                              <span className="font-bold text-gray-700 leading-none">{item.product.title}</span>
-                                              {item.note && <p className="text-[11px] text-gray-500 font-medium mt-0.5">↳ {item.note}</p>}
-                                            </div>
-                                        </div>
-                                        <span className="text-gray-400 font-medium text-xs shrink-0">฿{item.price}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
+                        <OrderProgress status={order.status} />
                         
                         <div className="mt-5">
-                            <div className="flex justify-between items-center px-2">
+                            <div className="flex justify-between items-center px-2 mb-4">
                                 <div className="flex items-center gap-2 text-xs font-bold text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full">
                                     <Receipt size={14} className="text-gray-400"/>
                                     {order.paymentMethod === 'transfer' ? 'โอนจ่าย' : 'เงินสด'}
                                 </div>
                                 <div className="text-right flex items-baseline gap-2">
                                     <span className="text-xs text-gray-400 font-bold uppercase">รวมสุทธิ</span>
-                                    <span className={`text-2xl font-black ${order.status === 'cancelled' ? 'text-gray-400 line-through' : 'text-orange-500'}`}>฿{order.totalAmount}</span>
+                                    <span className="text-2xl font-black text-orange-500">฿{order.totalPrice || order.totalAmount}</span>
                                 </div>
                             </div>
 
+                            <button onClick={() => setReceiptOrder(order)} className="w-full mb-3 py-3 bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200 rounded-xl font-bold flex justify-center items-center gap-2 transition-all active:scale-95 text-[14px]">
+                                <ReceiptText size={18} className="text-gray-400" /> ดูรายละเอียดคำสั่งซื้อ (บิลใบเสร็จ)
+                            </button>
+
                             {order.status === 'pending' && (
-                              <div className="mt-4 pt-4 border-t border-gray-100 border-dashed">
-                                <button onClick={() => openCancelModal(order.id)} className="w-full py-3.5 bg-white hover:bg-red-50 text-red-500 border-2 border-red-100 rounded-xl font-bold flex justify-center items-center gap-2 transition-all active:scale-95 text-[15px]">
+                              <div className="pt-3 border-t border-gray-100 border-dashed">
+                                <button onClick={() => openCancelModal(currentId)} className="w-full py-3 bg-white hover:bg-red-50 text-red-500 border border-red-100 rounded-xl font-bold flex justify-center items-center gap-2 transition-all active:scale-95 text-[14px]">
                                   <XCircle size={18} /> ยกเลิกคำสั่งซื้อนี้
                                 </button>
-                                <p className="text-center text-[11px] text-gray-400 mt-2 font-medium">*สามารถยกเลิกได้ก่อนที่ทางร้านจะกดยืนยันเริ่มทำอาหาร</p>
                               </div>
                             )}
                         </div>
@@ -222,6 +211,60 @@ const OrderStatus = () => {
          )}
       </div>
 
+      {/* Modal บิลใบเสร็จ */}
+      {receiptOrder && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex justify-center items-center p-4 animate-in fade-in">
+            <div className="bg-white w-full max-w-sm rounded-[24px] overflow-hidden shadow-2xl relative animate-in zoom-in-95">
+                <div className="bg-gray-50 py-5 text-center border-b border-gray-200 border-dashed relative">
+                    <button onClick={() => setReceiptOrder(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-800"><X size={20}/></button>
+                    <div className="w-12 h-12 bg-orange-100 text-orange-500 rounded-full flex items-center justify-center mx-auto mb-2"><ReceiptText size={24}/></div>
+                    <h3 className="font-black text-xl text-gray-800 tracking-wider">ใบเสร็จรับเงิน</h3>
+                    <p className="text-sm text-gray-500 font-medium mt-1">ออเดอร์ #{receiptOrder.ordersId || receiptOrder.id}</p>
+                </div>
+                
+                <div className="p-6 space-y-4">
+                    <div className="text-[13px] text-gray-500 flex justify-between">
+                        <span>วันที่สั่งซื้อ:</span>
+                        <span className="font-bold text-gray-800">{new Date(receiptOrder.createdAt || receiptOrder.orderDate).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })} น.</span>
+                    </div>
+                    
+                    <div className="border-t border-dashed border-gray-200 pt-4 pb-2 space-y-3">
+                        <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">รายการอาหาร</p>
+                        {receiptOrder.items.map((item, idx) => (
+                            <div key={idx} className="flex justify-between items-start text-[14px]">
+                            <div className="flex-1 pr-4">
+                                <p className="font-bold text-gray-800 leading-tight">
+                                    <span className="text-orange-500 mr-1.5">{item.quantity}x</span> 
+                                    {item.product?.title || item.name}
+                                </p>
+                                {item.note && <p className="text-[12px] text-gray-500 mt-0.5 font-medium">↳ {item.note}</p>}
+                            </div>
+                            <span className="font-bold text-gray-800 shrink-0">฿{item.unitPrice || item.price}</span>
+                            </div>
+                        ))}
+                    </div>
+                    
+                    <div className="border-t border-b border-dashed border-gray-200 py-4 flex justify-between items-center">
+                        <span className="font-black text-gray-800">ยอดสุทธิ (Total)</span>
+                        <span className="font-black text-3xl text-orange-500">฿{receiptOrder.totalPrice || receiptOrder.totalAmount}</span>
+                    </div>
+                    
+                    <div className="text-[13px] text-gray-500 flex justify-between pt-2">
+                        <span>ช่องทางชำระเงิน:</span>
+                        <span className="font-bold text-gray-800">{receiptOrder.paymentMethod === 'transfer' ? 'โอนเงินเข้าบัญชี' : 'เงินสด'}</span>
+                    </div>
+                </div>
+                
+                <div className="p-4 bg-gray-50 border-t border-gray-100">
+                    <button onClick={() => setReceiptOrder(null)} className="w-full py-3.5 bg-gray-800 hover:bg-black text-white rounded-xl font-bold transition-colors active:scale-95 shadow-md">
+                        ปิดหน้าต่าง
+                    </button>
+                </div>
+            </div>
+        </div>
+      )}
+
+      {/* Modal ยกเลิก */}
       {cancelModalOpen && (
         <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-[400px] rounded-[28px] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col">

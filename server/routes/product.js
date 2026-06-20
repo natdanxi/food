@@ -2,19 +2,14 @@ const express = require('express');
 const router = express.Router();
 const productController = require('../controllers/product');
 const { auth } = require('../middleware/auth');
-const multer = require('multer');
 
-// ตั้งค่าที่เก็บไฟล์
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, 'uploads/'),
-    filename: (req, file, cb) => cb(null, `product-${Date.now()}-${file.originalname}`)
-});
-const upload = multer({ storage });
+//  นำเข้าระบบจัดการไฟล์จาก Middleware
+const upload = require('../middleware/upload');
 
-// 🟢 แก้ไข: ใส่ callback function (Controller) ให้ถูกต้อง
+//  ไม่ต้องมี auth เพราะให้ลูกค้าดูเมนูได้
 router.get('/product', productController.getProducts);
 
-// 🟢 แก้ไข: เพิ่ม upload.single('image') เพื่อดึงข้อมูลจาก FormData
+//  ด่านตรวจ: ต้องเป็น Admin (auth) และรับไฟล์รูป (upload.single)
 router.post('/product', auth, upload.single('image'), productController.createProduct);
 router.put('/product/:id', auth, upload.single('image'), productController.updateProduct);
 router.delete('/product/:id', auth, productController.deleteProduct);

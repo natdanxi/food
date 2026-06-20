@@ -1,25 +1,22 @@
 const express = require('express');
 const router = express.Router();
 
-// นำเข้า Middleware รปภ.
 const { auth } = require('../middleware/auth'); 
+const upload = require('../middleware/upload'); 
 
-// นำเข้า Controller ของร้านค้าทั้งหมด
 const { 
     getShopInfo, 
-    updateShopInfo, 
+    updateShop, // ✨ แก้จาก updateShopInfo เป็น updateShop ให้ตรงกัน
     checkShopStatus 
 } = require('../controllers/shop');
 
-// ==========================================
-// กำหนดเส้นทาง API (Routes)
-// ==========================================
-
-// สำหรับดึงข้อมูลและตั้งค่าร้านค้า (ใช้ในหน้า Admin Settings)
 router.get('/shop', getShopInfo);
-router.put('/shop', auth, updateShopInfo); 
-
-// 🟢 เส้นทางนี้คือตัวที่ช่วยแก้ Error 404 ให้ Navbar!
 router.get('/shop/status', checkShopStatus); 
+
+// ✨ แก้ไขฟังก์ชันปลายทางตรงนี้เป็น updateShop ด้วยครับ
+router.put('/shop', auth, upload.fields([
+    { name: 'logo', maxCount: 1 },
+    { name: 'qrCode', maxCount: 1 }
+]), updateShop); 
 
 module.exports = router;
