@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate, Link } from 'react-router-dom';
 import { API_URL } from '../../api'; 
-import { Mail, Lock, Eye, EyeOff, ChefHat, Check, Loader2, Utensils } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, ChefHat, Check, Loader2 } from 'lucide-react';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -24,7 +24,8 @@ const Login = () => {
     setError('');
 
     try {
-      const res = await axios.post(`${API_URL}/api/login`, form);
+      // 🟢 แก้ไขจุดนี้: เอาคำว่า /api ออกเนื่องจากค่าดั้งเดิมใน API_URL มีพ่วงมาให้อยู่แล้ว
+      const res = await axios.post(`${API_URL}/login`, form);
       localStorage.setItem('token', res.data.token);
       
       const user = res.data.payload.user;
