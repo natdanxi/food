@@ -31,7 +31,7 @@ const Register = () => {
       // ✅ แก้จุดผิด 2: ส่งตัวแปร formData (ไม่ใช่ form)
       await axios.post(`${API_URL}/api/register`, formData);
       
-      alert('สมัครสมาชิกสำเร็จ! กรุณาเข้าสู่ระบบ 🎉');
+      alert('สมัครสมาชิกสำเร็จ! กรุณาเข้าสู่ระบบ ');
       navigate('/login'); 
     } catch (err) {
       console.error(err);
