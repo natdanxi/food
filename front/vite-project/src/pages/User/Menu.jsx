@@ -12,7 +12,7 @@ export default function Menu() {
   const [activeCategory, setActiveCategory] = useState('ทั้งหมด');
   
   // State สถานะร้านค้า
-  const [shopStatus, setShopStatus] = useState({ isOpenNow: false, reason: '' });
+  const [shopStatus, setShopStatus] = useState({ isOpenNow: true, reason: '' });
 
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [quantity, setQuantity] = useState(1);
@@ -28,7 +28,6 @@ export default function Menu() {
   ];
 
   useEffect(() => {
-    // 1. ดึงเมนูและหมวดหมู่ (ดึงครั้งเดียวตอนเปิดหน้า)
     const fetchData = async () => {
       try {
         const [catRes, prodRes] = await Promise.all([
@@ -36,11 +35,9 @@ export default function Menu() {
           axios.get(`${API_URL}/api/product`)
         ]);
 
-        // 🟢 1. กรองและใช้ categoryName ให้ตรงกับ Schema
         const publicCategories = catRes.data.filter(cat => !cat.categoryName.includes('หน้าร้าน'));
         setCategories([{ categoryName: 'ทั้งหมด' }, ...publicCategories]);
 
-        // 🟢 2. กรองเมนูอาหารและจัดเรียง (แนะนำขึ้นก่อน -> ขายดี -> ทั่วไป)
         let publicProducts = prodRes.data.filter(p => !p.category?.categoryName?.includes('หน้าร้าน'));
         publicProducts.sort((a, b) => {
           if (b.isRecommended !== a.isRecommended) return b.isRecommended ? 1 : -1;
@@ -48,33 +45,36 @@ export default function Menu() {
         });
         
         setProducts(publicProducts);
-        
       } catch (err) { 
         console.error("Fetch Data Error:", err); 
       }
     };
     fetchData();
 
-    // 2. ฟังก์ชันดึงสถานะร้าน (เช็คว่าปิดหรือยัง)
+    // 🟢 แก้ไขจุดรับค่าใน fetchShopStatus เพื่อแก้อาการปุ่มสีส้มค้าง
     const fetchShopStatus = async () => {
       try {
         const statusRes = await axios.get(`${API_URL}/api/shop/status`);
-        setShopStatus(statusRes.data);
-      } catch (err) { console.error(err); }
+        // ทำการ Fallback เช็คตัวแปรทุกมิติที่เป็นไปได้จาก API
+        const isShopOpen = statusRes.data.isOpenNow ?? statusRes.data.isOpen ?? statusRes.data.isOpenNow === true;
+        
+        setShopStatus({
+          isOpenNow: isShopOpen,
+          reason: statusRes.data.reason || 'นอกเวลาทำการ'
+        });
+      } catch (err) { 
+        console.error(err); 
+      }
     };
     
-    // ดึงครั้งแรก
     fetchShopStatus();
-
-    // 3. ดึงสถานะร้านใหม่ทุกๆ 5 วินาที (Real-time)
     const interval = setInterval(fetchShopStatus, 5000);
     return () => clearInterval(interval);
 
   }, []);
 
-  // 🟢 ฟังก์ชันกดเลือกเมนู (ดักจับ Guest และสถานะเมนู/ร้าน)
   const handleOpenModal = (product) => {
-    // 1. ถ้าร้านปิด
+    // 1. ถ้าร้านปิด (เช็คสถานะร้านที่ถูกแก้ไขให้ชัวร์)
     if (!shopStatus.isOpenNow) {
       Swal.fire({
         title: 'ร้านปิดให้บริการ',
@@ -85,7 +85,7 @@ export default function Menu() {
       return;
     }
 
-    // 2. ถ้าเมนูหมด (isAvailable = false)
+    // 2. ถ้าเมนูหมด
     if (!product.isAvailable) {
       Swal.fire({
         title: 'สินค้าหมด',
@@ -110,13 +110,12 @@ export default function Menu() {
         cancelButtonText: 'ดูเมนูต่อ'
       }).then((result) => {
         if (result.isConfirmed) {
-          window.location.href = '/login'; // ไปหน้าเข้าสู่ระบบ
+          window.location.href = '/login'; 
         }
       });
       return; 
     }
     
-    // 4. ถ้าผ่านเงื่อนไขทั้งหมด ให้เปิด Modal เลือกตัวเลือก
     setSelectedProduct(product);
     setQuantity(1);
     setNote('');
@@ -129,14 +128,13 @@ export default function Menu() {
     const addonsText = selectedAddons.length > 0 ? `เพิ่ม: ${selectedAddons.join(', ')}` : '';
     const finalNote = [addonsText, note].filter(Boolean).join(' | ');
 
-    // 🟢 เก็บข้อมูลลง LocalStorage ให้ตรงกับ Schema (ใช้ productId และ image)
     const newItem = {
-      id: selectedProduct.productId, // ใช้ productId อ้างอิง
+      id: selectedProduct.productId, 
       product_id: selectedProduct.productId,
       title: selectedProduct.title,
       name: selectedProduct.title,
       price: parseFloat(selectedProduct.price) + addonsPrice,
-      image: selectedProduct.image, // ใช้ image
+      image: selectedProduct.image, 
       quantity: quantity,
       note: finalNote
     };
@@ -181,18 +179,15 @@ export default function Menu() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredProducts.map((item) => (
-            // 🟢 เปลี่ยนคีย์เป็น productId และจัดการ UI กรณีสินค้าหมด
             <div key={item.productId} onClick={() => handleOpenModal(item)} className={`bg-white rounded-[24px] overflow-hidden border border-gray-100 shadow-sm flex flex-col cursor-pointer group hover:shadow-md transition-all ${!item.isAvailable ? 'opacity-70 grayscale-[50%]' : ''}`}>
               <div className="h-48 bg-gray-100 overflow-hidden relative">
                 {item.image ? <img src={`${API_URL}/uploads/${item.image}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" /> : <div className="w-full h-full flex items-center justify-center text-gray-300">ไม่มีรูป</div>}
                 
-                {/* 🟢 Badge แนะนำ / ขายดี */}
                 <div className="absolute top-3 left-3 flex flex-col gap-1.5 z-10">
                   {item.isRecommended && <span className="bg-orange-500 text-white text-[11px] font-black px-2.5 py-1 rounded shadow-md flex items-center gap-1"><Star size={12} fill="currentColor"/> แนะนำ</span>}
                   {item.soldCount >= 10 && <span className="bg-pink-500 text-white text-[11px] font-black px-2.5 py-1 rounded shadow-md flex items-center gap-1"><Flame size={12} fill="currentColor"/> ขายดี</span>}
                 </div>
 
-                {/* 🟢 Overlay ปิดการขาย */}
                 {!item.isAvailable && (
                   <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-10">
                     <span className="bg-red-500 text-white px-3 py-1.5 rounded-lg font-black text-sm border-2 border-red-400">หมดชั่วคราว</span>
@@ -215,7 +210,6 @@ export default function Menu() {
         </div>
       </main>
 
-      {/* 🟢 Modal เลือก Add-on (แสดงเฉพาะตอนเลือกสั่งซื้อได้) */}
       {selectedProduct && (
         <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-[150] flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-white w-full max-w-[420px] rounded-[24px] p-6 shadow-2xl relative animate-in zoom-in-95">

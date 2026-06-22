@@ -24,7 +24,7 @@ const Login = () => {
     setError('');
 
     try {
-      // 🟢 แก้ไขจุดนี้: เอาคำว่า /api ออกเนื่องจากค่าดั้งเดิมใน API_URL มีพ่วงมาให้อยู่แล้ว
+      //  ใช้ API_URL และ path /login
       const res = await axios.post(`${API_URL}/login`, form);
       localStorage.setItem('token', res.data.token);
       

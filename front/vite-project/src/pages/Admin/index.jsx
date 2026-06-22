@@ -1,339 +1,254 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import axios from 'axios';
 import { 
-  Home as HomeIcon, ShoppingBag, FileText, Users, Settings as SettingsIcon, 
-  LogOut, Bell, Menu as MenuIcon, X, Store, ChevronRight, User
+  ChefHat, CheckCircle, Clock, Utensils, 
+  User, Store, ShoppingBag, Plus, Minus, Search, 
+  Receipt, XCircle, Power, ChevronRight, Trash2, X,
+  Phone, QrCode, Banknote
 } from 'lucide-react';
+import Swal from 'sweetalert2';
+import { API_URL } from '../../../api';
 
-import { API_URL } from '../../api';
+import OrdersHeader from './OrdersHeader';
+import POSProductGrid from './POSProductGrid';
+import POSCartSidebar from './POSCartSidebar';
+import QueueTabs from './QueueTabs';
+import OrderCard from './OrderCard';
+import Modal from '../../../components/ui/Modal';
 
-// ✅ Import Pages
-import Home from './Home';
-import Orders from './Orders';  
-import MenuManagement from './MenuManagement';
-import Customers from './Customers';
-import Settings from './Settings';
+const REJECT_REASONS = ['วัตถุดิบหมด', 'ร้านกำลังจะปิด', 'ออเดอร์เยอะทำไม่ทัน', 'ลูกค้าติดต่อขอยกเลิก'];
 
-// ==========================================
-// 🎨 SUB-COMPONENTS: UI Components
-// ==========================================
+export default function AdminOrders() {
+  const [appMode, setAppMode] = useState('pos'); 
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('pending'); 
+  
+  const [rejectModalOpen, setRejectModalOpen] = useState(false);
+  const [orderToReject, setOrderToReject] = useState(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [viewSlipImage, setViewSlipImage] = useState(null);
 
-/**
- * 📌 Sidebar - เมนูด้านข้าง
- * @param {boolean} isSidebarOpen - สถานะเปิด/ปิด
- * @param {function} setIsSidebarOpen - ตั้งค่าสถานะ
- * @param {object} shopInfo - ข้อมูลร้านค้า
- * @param {string} activeTab - แท็บที่ใช้งานอยู่
- * @param {function} handleMenuClick - จัดการคลิกเมนู
- * @param {function} handleLogout - ออกจากระบบ
- */
-const Sidebar = ({ isSidebarOpen, setIsSidebarOpen, shopInfo, activeTab, handleMenuClick, handleLogout }) => {
-  // ✅ กำหนดเมนูรายการต่างๆ
-  const menuItems = [
-    { id: 'home', label: 'หน้าหลัก', icon: HomeIcon },
-    { id: 'orders', label: 'จัดการออเดอร์', icon: ShoppingBag },
-    { id: 'menu', label: 'รายการอาหาร', icon: FileText },
-    { id: 'customers', label: 'ข้อมูลลูกค้า', icon: Users },
-    { id: 'settings', label: 'ตั้งค่าร้านค้า', icon: SettingsIcon },
-  ];
+  // 🟢 ดึงสถานะเริ่มต้นจาก localStorage ทันทีเพื่อกัน UI กระพริบดีดกลับตอนเปลี่ยนหน้า
+  const [isOpen, setIsOpen] = useState(() => {
+    const saved = localStorage.getItem('shopIsOpen');
+    return saved !== null ? JSON.parse(saved) : true;
+  });
+  const [isTogglingOpen, setIsTogglingOpen] = useState(false);
 
-  return (
-    <>
-      {/* ✅ Overlay ปิดเมื่อคลิกพื้นหลัง */}
-      {isSidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-40 animate-in fade-in backdrop-blur-sm" 
-          onClick={() => setIsSidebarOpen(false)}
-        />
-      )}
-      
-      {/* ✅ Sidebar Navigation */}
-      <aside className={`fixed inset-y-0 left-0 z-50 w-[280px] bg-white border-r border-gray-100 transition-transform duration-300 ease-in-out flex flex-col ${
-        isSidebarOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'
-      }`}>
-        
-        {/* ✅ Shop Header Section */}
-        <div className="relative p-6 pt-12 flex flex-col justify-end overflow-hidden bg-slate-900">
-          {/* ✅ Close button */}
-          <button 
-            onClick={() => setIsSidebarOpen(false)} 
-            className="absolute top-4 right-4 z-10 p-1.5 bg-white/10 hover:bg-white/20 rounded-full transition-colors text-white"
-          >
-            <X size={20} />
-          </button>
-          
-          {/* ✅ Shop Info */}
-          <div className="relative z-10 flex flex-col items-start py-4">
-            <h2 className="font-bold text-xl text-white tracking-wide">{shopInfo.name}</h2>
-            <p className="text-sm text-orange-400 font-medium">ผู้ดูแลระบบ (Admin)</p>
-          </div>
-        </div>
+  const [products, setProducts] = useState([]); 
+  const [categories, setCategories] = useState([]);
+  const [activeCategory, setActiveCategory] = useState('all'); 
+  const [cart, setCart] = useState([]);
+  const [tableInfo, setTableInfo] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
 
-        {/* ✅ Menu Navigation Items */}
-        <nav className="flex-1 overflow-y-auto py-2 px-3 space-y-1 mt-2">
-          {menuItems.map((item) => {
-            const isActive = activeTab === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => handleMenuClick(item.id)}
-                className={`w-full flex items-center justify-between p-3.5 rounded-xl transition-all font-medium ${
-                  isActive 
-                    ? 'bg-orange-50 text-orange-600' 
-                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                }`}
-              >
-                <div className="flex items-center gap-4">
-                  <item.icon 
-                    size={20} 
-                    strokeWidth={1.5} 
-                    className={isActive ? 'text-orange-500' : 'text-gray-500'} 
-                  />
-                  <span className={isActive ? 'font-bold' : ''}>{item.label}</span>
-                </div>
-                <ChevronRight size={18} className={isActive ? 'text-orange-500' : 'text-gray-300'} />
-              </button>
-            );
-          })}
-        </nav>
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [tempQty, setTempQty] = useState(1);
+  const [tempNote, setTempNote] = useState('');
+  const [selectedAddons, setSelectedAddons] = useState([]);
 
-        {/* ✅ Logout Button */}
-        <div className="p-4 mb-4 border-t border-gray-100 pt-6">
-          <button 
-            onClick={handleLogout} 
-            className="flex items-center gap-4 w-full p-3.5 text-red-500 hover:bg-red-50 rounded-xl transition-all font-bold"
-          >
-            <LogOut size={20} strokeWidth={2} /> ออกจากระบบ
-          </button>
-        </div>
-      </aside>
-    </>
-  );
-};
+  const [currentTime, setCurrentTime] = useState(new Date());
+  
+  const isFirstLoad = useRef(true);
+  const prevPendingCount = useRef(0);
+  const token = localStorage.getItem('token');
 
-/**
- * 📌 Topbar - แถบด้านบน
- * @param {string} activeTab - แท็บปัจจุบัน
- * @param {function} setIsSidebarOpen - เปิดปิด sidebar
- * @param {function} setShowProfileModal - เปิด Profile modal
- */
-const Topbar = ({ activeTab, setIsSidebarOpen, setShowProfileModal }) => {
-  // ✅ ฟังก์ชันดึงชื่อหน้า
-  const getTitle = () => {
-    const titleMap = {
-      'home': 'หน้าหลัก',
-      'orders': 'จัดการออเดอร์',
-      'menu': 'รายการอาหาร',
-      'customers': 'ข้อมูลลูกค้า',
-      'settings': 'ตั้งค่าร้านค้า',
-    };
-    return titleMap[activeTab] || '';
-  };
-
-  return (
-    <header className="py-3 px-4 sm:px-6 flex justify-between items-center shadow-sm z-10 relative border-b border-gray-200 bg-white min-h-[76px]">
-      {/* ✅ Left Section: Menu & Title */}
-      <div className="flex items-center gap-3 relative z-10">
-        <button 
-          onClick={() => setIsSidebarOpen(true)} 
-          className="p-2 -ml-2 text-gray-700 hover:bg-gray-100 rounded-full transition active:scale-95"
-        >
-          <MenuIcon size={24} />
-        </button>
-        <h1 className="text-lg sm:text-xl font-bold text-gray-800 flex items-center gap-2">
-          {getTitle()}
-        </h1>
-      </div>
-
-      {/* ✅ Right Section: Notification & Profile */}
-      <div className="flex items-center gap-3 md:gap-4 relative z-10">
-        {/* ✅ Notification Bell */}
-        <button className="p-2 bg-gray-50 rounded-full text-gray-600 hover:text-orange-500 hover:bg-orange-50 transition-colors active:scale-95">
-          <Bell size={20} />
-        </button>
-
-        {/* ✅ Admin Profile Button */}
-        <button 
-          onClick={() => setShowProfileModal(true)} 
-          className="flex items-center gap-2 md:gap-3 bg-orange-50/50 hover:bg-orange-50 py-1.5 px-3 md:px-4 rounded-full border border-orange-100 transition-colors cursor-pointer relative z-50 active:scale-95"
-        >
-          <div className="w-7 h-7 md:w-8 md:h-8 text-orange-600 rounded-full flex items-center justify-center shrink-0 border border-orange-200 bg-white">
-            <User size={16} strokeWidth={2.5} />
-          </div>
-          <div className="text-left pr-1 md:pr-2 leading-none hidden sm:block">
-            <p className="text-[14px] md:text-[15px] font-black text-gray-900 tracking-tight">Admin</p>
-            <p className="text-[10px] md:text-[11px] font-bold text-gray-500 mt-0.5 whitespace-nowrap">ผู้จัดการร้าน</p>
-          </div>
-        </button>
-      </div>
-    </header>
-  );
-};
-
-/**
- * 📌 ProfileModal - Modal แสดงข้อมูล Admin
- * @param {boolean} showProfileModal - แสดง/ซ่อน modal
- * @param {function} setShowProfileModal - ตั้งค่าการแสดง
- * @param {object} shopInfo - ข้อมูลร้านค้า
- * @param {function} handleLogout - ฟังก์ชันออกจากระบบ
- * @param {function} setActiveTab - ตั้งค่าแท็บ
- */
-const ProfileModal = ({ showProfileModal, setShowProfileModal, shopInfo, handleLogout, setActiveTab }) => {
-  if (!showProfileModal) return null;
-
-  return (
-    <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-[200] p-4 animate-in fade-in">
-      <div className="bg-white w-full max-w-[380px] rounded-[32px] overflow-hidden shadow-2xl animate-in zoom-in-95">
-        
-        {/* ✅ Modal Header */}
-        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-orange-50/50">
-          <h2 className="text-[18px] font-black text-gray-900 flex items-center gap-2">
-            <Store size={20} className="text-orange-500" /> ข้อมูลผู้จัดการร้าน
-          </h2>
-          <button 
-            onClick={() => setShowProfileModal(false)} 
-            className="p-1.5 bg-white border border-gray-200 rounded-full text-gray-400 hover:bg-gray-100"
-          >
-            <X size={16} />
-          </button>
-        </div>
-
-        {/* ✅ Modal Content */}
-        <div className="p-8 text-center bg-white">
-          <div className="w-20 h-20 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-white shadow-md">
-            <User size={40} strokeWidth={2.5} />
-          </div>
-          <h3 className="text-[22px] font-black text-gray-900">Admin</h3>
-          <p className="text-[14px] font-bold text-gray-500 mt-1">
-            ผู้จัดการร้าน {shopInfo.name}
-          </p>
-        </div>
-
-        {/* ✅ Modal Actions */}
-        <div className="p-5 border-t border-gray-100 bg-gray-50 flex flex-col gap-2.5">
-          <button 
-            onClick={() => { 
-              setShowProfileModal(false); 
-              setActiveTab('settings'); 
-            }} 
-            className="w-full bg-[#ea580c] hover:bg-orange-600 text-white font-black py-3.5 rounded-[16px] shadow-sm transition-all active:scale-95 flex justify-center items-center gap-2"
-          >
-            <Store size={18} /> ตั้งค่าร้านค้า
-          </button>
-          <button 
-            onClick={handleLogout} 
-            className="w-full mt-2 bg-red-50 hover:bg-red-100 text-red-600 font-bold py-3.5 rounded-[16px] transition-all active:scale-95 flex justify-center items-center gap-2"
-          >
-            <LogOut size={18} /> ออกจากระบบ
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// ==========================================
-// 🚀 MAIN COMPONENT: Admin Dashboard
-// ==========================================
-/**
- * 📌 AdminDashboard - หน้าแรกสำหรับผู้ดูแลระบบ
- * - Sidebar: เมนูนำทาง
- * - Topbar: แถบด้านบน
- * - Content: เนื้อหาหน้า (Home, Orders, Menu, Customers, Settings)
- */
-export default function AdminDashboard() {
-  // ✅ Route Navigation
-  const navigate = useNavigate();
-
-  // ✅ State Management
-  const [activeTab, setActiveTab] = useState('home'); // แท็บปัจจุบัน
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // สถานะ Sidebar
-  const [showProfileModal, setShowProfileModal] = useState(false); // สถานะ Profile Modal
-  const [shopInfo, setShopInfo] = useState({ 
-    name: 'แม่ครัวตัวกลม', 
-    logo: '' 
-  }); // ข้อมูลร้านค้า
-
-  // ✅ Fetch Shop Information
   useEffect(() => {
-    const fetchShopInfo = async () => {
-      try {
-        const res = await axios.get(`${API_URL}/api/shop`);
-        // ✅ จัดการรูปแบบ response ที่อาจเป็น array หรือ object
-        const data = Array.isArray(res.data) ? res.data[0] : res.data;
-        
-        if (data) {
-          setShopInfo({ 
-            name: data.name || data.shopName || data.shop_name || 'แม่ครัวตัวกลม', 
-            logo: data.logo || data.image || data.shopImage || data.images || '' 
-          });
-        }
-      } catch (err) { 
-        console.error("🔴 Fetch shop info error:", err); 
-      }
-    };
-    fetchShopInfo();
+    fetchOrders(); fetchProducts(); fetchCategories(); fetchShopStatus(); 
+    const interval = setInterval(fetchOrders, 5000); 
+    const clock = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => { clearInterval(interval); clearInterval(clock); };
   }, []);
 
-  // ✅ Logout Handler
-  const handleLogout = () => {
-    if (window.confirm('ยืนยันออกจากระบบ?')) {
-      localStorage.removeItem('token');
-      navigate('/login');
+  const fetchOrders = async () => {
+    try { 
+      const res = await axios.get(`${API_URL}/api/orders`, { headers: { Authorization: `Bearer ${token}` } }); 
+      setOrders(res.data); 
+      
+      const currentPendingCount = res.data.filter(o => o.status === 'pending').length;
+      
+      // 🟢 ระบบแจ้งเตือนเสียง Real-time เมื่อมีคำสั่งซื้อใหม่เข้ามา
+      if (!isFirstLoad.current && currentPendingCount > prevPendingCount.current) {
+          const audio = new Audio('https://actions.google.com/sounds/v1/alarms/store_door_chime.ogg');
+          audio.play().catch(e => console.log('Audio error:', e));
+
+          Swal.fire({
+            toast: true, position: 'top-end', icon: 'info',
+            title: '🔔 มีออเดอร์ใหม่เข้ามา!', showConfirmButton: false, timer: 4000
+          });
+      }
+      prevPendingCount.current = currentPendingCount;
+      isFirstLoad.current = false;
+
+    } catch (err) { console.error(err); } finally { setLoading(false); }
+  };
+
+  const fetchShopStatus = async () => {
+    try { 
+      const res = await axios.get(`${API_URL}/api/shop/status`); 
+      // ดักจับสถานะจาก Backend ทุกรูปแบบที่เป็นไปได้
+      const shopOpen = res.data.isOpenNow ?? res.data.isOpen ?? true;
+      setIsOpen(shopOpen); 
+      localStorage.setItem('shopIsOpen', JSON.stringify(shopOpen));
+    } catch (err) { console.error(err); }
+  };
+
+  const fetchCategories = async () => {
+    try { const res = await axios.get(`${API_URL}/api/category`); setCategories(res.data); } catch (err) {}
+  };
+
+  // 🟢 ปรับฟังก์ชันเปิด-ปิดร้านให้ยิง JSON Payload ตรงตามโครงสร้างที่ฐานข้อมูลอัปเดตจริง
+  const toggleShopOpen = async () => {
+    setIsTogglingOpen(true);
+    try {
+      const currentShopRes = await axios.get(`${API_URL}/api/shop`);
+      const nextStatus = !isOpen;
+      
+      // ส่ง Object ไปให้หลังบ้านบันทึก
+      await axios.put(`${API_URL}/api/shop`, { 
+        isOpenNow: nextStatus,
+        isOpen: nextStatus, 
+        name: currentShopRes.data?.shopName || 'แม่ครัวตัวกลม' 
+      }, { 
+        headers: { Authorization: `Bearer ${token}` } 
+      });
+      
+      setIsOpen(nextStatus);
+      localStorage.setItem('shopIsOpen', JSON.stringify(nextStatus));
+      
+      Swal.fire({ 
+        toast: true, position: 'top-end', icon: 'success', 
+        title: nextStatus ? 'ร้านเปิดรับออเดอร์แล้ว 🎉' : 'ปิดร้านชั่วคราวแล้ว 🔒', 
+        showConfirmButton: false, timer: 2000 
+      });
+    } catch (err) { 
+      Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถเปลี่ยนสถานะร้านผ่านเซิร์ฟเวอร์ได้', 'error'); 
+    } finally { 
+      setIsTogglingOpen(false); 
     }
   };
 
-  // ✅ Menu Click Handler
-  const handleMenuClick = (tabId) => {
-    setActiveTab(tabId);
-    setIsSidebarOpen(false); // ปิด Sidebar หลังเลือกเมนู
+  const fetchProducts = async () => {
+      try { const res = await axios.get(`${API_URL}/api/product`); setProducts(res.data); } catch (err) {}
   };
 
+  const handleStatusChange = async (orderId, nextStatus) => {
+    try { 
+        await axios.put(`${API_URL}/api/order-status`, { id: orderId, status: nextStatus }, { headers: { Authorization: `Bearer ${token}` } }); 
+        fetchOrders(); 
+    } catch (err) { Swal.fire('เกิดข้อผิดพลาด', 'อัปเดตสถานะไม่ได้', 'error'); }
+  };
+
+  const confirmRejectOrder = async () => {
+    if(!rejectReason) return alert("กรุณาเลือกเหตุผล");
+    try {
+      await axios.put(`${API_URL}/api/order-status`, { id: orderToReject, status: 'cancelled', rejectReason }, { headers: { Authorization: `Bearer ${token}` } });
+      setRejectModalOpen(false); fetchOrders();
+    } catch (err) { Swal.fire('เกิดข้อผิดพลาด', 'ยกเลิกคิวไม่ได้', 'error'); }
+  };
+
+  const openProductModal = (product) => { 
+    setSelectedProduct(product); 
+    setTempQty(1); 
+    setTempNote('');
+    setSelectedAddons([]);
+  };
+
+  const confirmAddToCart = () => {
+    if (!selectedProduct) return;
+    const addonsPrice = selectedAddons.length * 5;
+    const addonsText = selectedAddons.length > 0 ? `เพิ่ม: ${selectedAddons.join(', ')}` : '';
+    const finalNote = [addonsText, tempNote].filter(Boolean).join(' | ');
+    const finalPrice = parseFloat(selectedProduct.price) + addonsPrice;
+
+    setCart(prev => [...prev, { 
+      ...selectedProduct, 
+      cartId: Date.now().toString(), 
+      qty: tempQty, 
+      price: finalPrice, 
+      image: selectedProduct.image, 
+      note: finalNote 
+    }]);
+    setSelectedProduct(null); 
+  };
+
+  const updateQty = (cartId, delta) => { setCart(prev => prev.map(item => item.cartId === cartId ? { ...item, qty: item.qty + delta } : item).filter(item => item.qty > 0)); };
+  const cartTotal = useMemo(() => cart.reduce((sum, item) => sum + (item.price * item.qty), 0), [cart]);
+
+  const handleWalkinCheckout = async (paymentMethod) => {
+    if (cart.length === 0) return;
+    try {
+      await axios.post(`${API_URL}/api/order-walkin`, { cart, cartTotal, orderType: 'walkin', paymentMethod, customerInfo: tableInfo || 'ลูกค้าหน้าร้าน' }, { headers: { Authorization: `Bearer ${token}` } });
+      setCart([]); setTableInfo(''); fetchOrders(); 
+      Swal.fire({ title: 'สำเร็จ', text: 'บันทึกยอดขายเรียบร้อย', icon: 'success', timer: 1500, showConfirmButton: false });
+    } catch (err) { Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถบันทึกข้อมูลได้', 'error'); }
+  };
+
+  const filteredOrders = orders.filter(o => o.status === activeTab);
+
   return (
-    <div className="flex min-h-screen bg-[#FDFDFC] font-sans relative">
-      
-      {/* ✅ Sidebar Navigation */}
-      <Sidebar
-        isSidebarOpen={isSidebarOpen}
-        setIsSidebarOpen={setIsSidebarOpen}
-        shopInfo={shopInfo}
-        activeTab={activeTab}
-        handleMenuClick={handleMenuClick}
-        handleLogout={handleLogout}
-      />
+    <div className="flex flex-col h-[calc(100vh-76px)] bg-[#F1F3F5] -m-4 sm:-m-6">
+      <OrdersHeader appMode={appMode} setAppMode={setAppMode} pendingCount={orders.filter(o => o.status === 'pending').length} currentTime={currentTime} isOpen={isOpen} toggleShopOpen={toggleShopOpen} isTogglingOpen={isTogglingOpen} />
 
-      {/* ✅ Main Content Area */}
-      <main className="flex-1 flex flex-col h-screen overflow-hidden">
-        
-        {/* ✅ Top Navigation Bar */}
-        <Topbar
-          activeTab={activeTab}
-          setIsSidebarOpen={setIsSidebarOpen}
-          setShowProfileModal={setShowProfileModal}
-        />
+      <div className="flex-1 flex overflow-hidden w-full">
+        {appMode === 'pos' && (
+          <div className="flex-1 flex w-full animate-in fade-in duration-300">
+            <POSProductGrid products={products} categories={categories} activeCategory={activeCategory} setActiveCategory={setActiveCategory} searchTerm={searchTerm} setSearchTerm={setSearchTerm} openProductModal={openProductModal} />
+            <POSCartSidebar cart={cart} tableInfo={tableInfo} setTableInfo={setTableInfo} updateQty={updateQty} cartTotal={cartTotal} handleWalkinCheckout={handleWalkinCheckout} />
+          </div>
+        )}
 
-        {/* ✅ Page Content */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-[#F8F9FA]">
-          <div className="w-full animate-in slide-in-from-bottom-2 duration-300 pb-10">
-            {/* ✅ Render Content Based on Active Tab */}
-            {activeTab === 'home' && <Home />}
-            {activeTab === 'orders' && <Orders />}
-            {activeTab === 'menu' && <MenuManagement />}
-            {activeTab === 'customers' && <Customers />}
-            {activeTab === 'settings' && <Settings />}
+        {appMode === 'orders' && (
+           <div className="flex-1 flex flex-col w-full">
+             <QueueTabs activeTab={activeTab} setActiveTab={setActiveTab} pendingCount={orders.filter(o=>o.status==='pending').length} cookingCount={orders.filter(o=>o.status==='cooking').length} completedCount={orders.filter(o=>o.status==='completed').length} cancelledCount={orders.filter(o=>o.status==='cancelled').length} />
+             <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 overflow-y-auto">
+                {filteredOrders.length > 0 ? (
+                  filteredOrders.map(order => <OrderCard key={order.ordersId || order.id} order={order} setViewSlipImage={setViewSlipImage} openRejectModal={(id) => { setOrderToReject(id); setRejectModalOpen(true); }} handleStatusChange={handleStatusChange} />)
+                ) : (
+                  <div className="col-span-full flex flex-col items-center justify-center py-20 text-gray-400">
+                    <Receipt size={64} className="mb-4 opacity-30" />
+                    <p className="text-lg font-bold">ไม่มีรายการออเดอร์ในสถานะนี้</p>
+                  </div>
+                )}
+             </div>
+           </div>
+        )}
+      </div>
+
+      {/* Modal จัดการวัตถุดิบและของหวานคงเดิม */}
+      {selectedProduct && (
+        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-[150] flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white w-full max-w-[420px] rounded-[24px] p-6 shadow-2xl relative animate-in zoom-in-95">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-[20px] font-black text-gray-900 line-clamp-1">{selectedProduct.title}</h2>
+              <button onClick={() => setSelectedProduct(null)} className="p-2 bg-gray-100 hover:bg-gray-200 rounded-full text-gray-500 transition-colors shrink-0"><X size={18}/></button>
+            </div>
+            {/* โค้ดภายในคงเดิม */}
+            <div className="flex items-center gap-4">
+              <div className="flex items-center justify-between border border-gray-200 rounded-xl px-2 py-2 w-[110px] shrink-0">
+                <button onClick={() => setTempQty(Math.max(1, tempQty - 1))} className="text-gray-400 hover:text-gray-800 p-1"><Minus size={18}/></button>
+                <span className="font-bold text-gray-800 text-[16px]">{tempQty}</span>
+                <button onClick={() => setTempQty(tempQty + 1)} className="text-gray-400 hover:text-gray-800 p-1"><Plus size={18}/></button>
+              </div>
+              <button onClick={confirmAddToCart} className="flex-1 bg-[#ea580c] hover:bg-orange-600 text-white font-bold py-3.5 rounded-xl flex justify-between px-5 transition-all shadow-sm active:scale-95">
+                <span>เพิ่มลงตะกร้า</span><span className="font-black text-[16px]">฿{(parseFloat(selectedProduct.price) + (selectedAddons.length * 5)) * tempQty}</span>
+              </button>
+            </div>
           </div>
         </div>
-      </main>
+      )}
 
-      {/* ✅ Admin Profile Modal */}
-      <ProfileModal
-        showProfileModal={showProfileModal}
-        setShowProfileModal={setShowProfileModal}
-        shopInfo={shopInfo}
-        handleLogout={handleLogout}
-        setActiveTab={setActiveTab}
-      />
+      <Modal isOpen={!!viewSlipImage} onClose={() => setViewSlipImage(null)} title="สลิปโอนเงิน">
+         <img src={viewSlipImage} className="w-full rounded-xl" />
+      </Modal>
+
+      <Modal isOpen={rejectModalOpen} onClose={() => setRejectModalOpen(false)} title="ปฏิเสธออเดอร์">
+         <div className="space-y-4">
+            {REJECT_REASONS.map(r => <button key={r} onClick={() => setRejectReason(r)} className={`block w-full text-left p-3 border-2 rounded-xl font-bold transition-all ${rejectReason === r ? 'bg-red-50 border-red-500 text-red-600' : 'border-gray-100 text-gray-600 hover:bg-gray-50'}`}>{r}</button>)}
+            <button onClick={confirmRejectOrder} className="w-full bg-red-500 hover:bg-red-600 text-white py-3.5 rounded-xl font-black mt-4 shadow-md transition-all active:scale-95">ยืนยันปฏิเสธ</button>
+         </div>
+      </Modal>
     </div>
   );
 }
