@@ -1,6 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { Store, Clock, Phone, MapPin, X, Info, Menu, ShoppingCart,User, ClipboardList, LogOut, ChevronRight, ShoppingBag } from 'lucide-react';
+// 🟢 เพิ่ม Icon สำหรับเมนูฝั่ง Admin
+import { 
+  Store, Clock, Phone, MapPin, X, Info, Menu, ShoppingCart, User, 
+  ClipboardList, LogOut, ChevronRight, ShoppingBag, LayoutDashboard, 
+  Utensils, Users, Settings 
+} from 'lucide-react';
 import { API_URL } from '../api'; 
 import { useNavigate } from 'react-router-dom';
 
@@ -15,6 +20,9 @@ const Navbar = () => {
   const token = localStorage.getItem('token');
   const isLoggedIn = !!token;
 
+  // 🟢 เช็คว่าบัญชีนี้เป็น Admin หรือไม่
+  const isAdmin = userInfo?.role === 'admin';
+
   useEffect(() => {
     const fetchShopInfo = async () => {
       try {
@@ -22,7 +30,6 @@ const Navbar = () => {
         const shop = res.data || {};
         setShopInfo(shop);
         
-        // 🟢 แก้ไขตรงนี้: ยึดค่าจากฐานข้อมูล (Backend) เป็นหลัก 100%
         const isCurrentlyOpen = shop.isOpen === true || String(shop.isOpen) === 'true';
 
         setShopStatus({
@@ -80,17 +87,18 @@ const Navbar = () => {
         </div>
 
         <div className="flex items-center gap-3 md:gap-4 shrink-0">
-          <button onClick={handleProfileClick} className="flex items-center gap-2 md:gap-3 bg-orange-50/50 hover:bg-orange-50 py-1.5 px-3 md:px-4 rounded-full border border-orange-100 transition-colors cursor-pointer relative z-50">
-             <div className="w-7 h-7 md:w-8 md:h-8 text-orange-600 rounded-full flex items-center justify-center shrink-0 border border-orange-200 bg-white">
+          <button onClick={handleProfileClick} className={`flex items-center gap-2 md:gap-3 py-1.5 px-3 md:px-4 rounded-full border transition-colors cursor-pointer relative z-50 ${isAdmin ? 'bg-purple-50/50 hover:bg-purple-50 border-purple-100' : 'bg-orange-50/50 hover:bg-orange-50 border-orange-100'}`}>
+             <div className={`w-7 h-7 md:w-8 md:h-8 rounded-full flex items-center justify-center shrink-0 border bg-white ${isAdmin ? 'text-purple-600 border-purple-200' : 'text-orange-600 border-orange-200'}`}>
                 <User size={16} strokeWidth={2.5} />
              </div>
              <div className="text-left pr-1 md:pr-2 leading-none">
                 <p className="text-[14px] md:text-[15px] font-black text-gray-900 tracking-tight">{isLoggedIn ? (userInfo?.firstname || 'User') : 'Guest'}</p>
-                <p className="text-[10px] md:text-[11px] font-bold text-gray-500 mt-0.5 whitespace-nowrap">{isLoggedIn ? 'สมาชิกทั่วไป' : 'ผู้เยี่ยมชม'}</p>
+                <p className="text-[10px] md:text-[11px] font-bold text-gray-500 mt-0.5 whitespace-nowrap">{isAdmin ? 'ผู้ดูแลระบบ (Admin)' : (isLoggedIn ? 'สมาชิกทั่วไป' : 'ผู้เยี่ยมชม')}</p>
              </div>
           </button>
           
-          {isLoggedIn && (
+          {/* 🟢 ซ่อนปุ่มตะกร้าสินค้าถ้าล็อกอินเป็น Admin */}
+          {isLoggedIn && !isAdmin && (
             <button onClick={() => window.location.href = '/cart'} className="w-10 h-10 md:w-12 md:h-12 bg-orange-50 hover:bg-orange-100 text-orange-500 rounded-full flex items-center justify-center transition-colors relative active:scale-95 shrink-0 border border-orange-100 z-50">
               <ShoppingCart size={20} />
               <span className="absolute top-1.5 right-1.5 md:top-2 md:right-2 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>
@@ -102,20 +110,61 @@ const Navbar = () => {
       {isSidebarOpen && <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-[100] animate-in fade-in duration-200" onClick={() => setIsSidebarOpen(false)}></div>}
 
       <div className={`fixed top-0 left-0 w-[280px] h-full bg-white z-[110] shadow-2xl transform transition-transform duration-300 ease-in-out flex flex-col ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="bg-[#141b2d] p-6 pb-8 relative flex flex-col items-center pt-12">
+        <div className={`p-6 pb-8 relative flex flex-col items-center pt-12 ${isAdmin ? 'bg-purple-900' : 'bg-[#141b2d]'}`}>
           <button onClick={() => setIsSidebarOpen(false)} className="absolute top-4 right-4 text-white/50 hover:text-white transition-colors z-20"><X size={24} /></button>
-          <div className="w-[72px] h-[72px] bg-white rounded-full flex items-center justify-center text-orange-600 mb-4 shadow-md"><User size={36} strokeWidth={2.5} /></div>
+          <div className={`w-[72px] h-[72px] bg-white rounded-full flex items-center justify-center mb-4 shadow-md ${isAdmin ? 'text-purple-600' : 'text-orange-600'}`}><User size={36} strokeWidth={2.5} /></div>
           <h2 className="text-[20px] font-bold text-white leading-tight">{isLoggedIn ? `${userInfo?.firstname || 'User'} ${userInfo?.lastname || ''}` : 'ยินดีต้อนรับ'}</h2>
-          <p className="text-[13px] text-gray-400 mt-1">{isLoggedIn ? userInfo?.email : 'กรุณาเข้าสู่ระบบเพื่อสั่งอาหาร'}</p>
+          <p className="text-[13px] text-white/70 mt-1">{isLoggedIn ? userInfo?.email : 'กรุณาเข้าสู่ระบบเพื่อสั่งอาหาร'}</p>
         </div>
 
         <div className="flex-1 overflow-y-auto py-2">
-          <a href="/menu" className="flex items-center justify-between px-6 py-4 text-gray-700 hover:bg-gray-50 transition-colors border-b border-gray-50"><div className="flex items-center gap-4"><ShoppingBag size={20} className="text-gray-500" /><span className="font-bold text-[15px]">เมนูอาหาร</span></div><ChevronRight size={16} className="text-gray-300" /></a>
-          {isLoggedIn && (
+          {/* 🟢 แสดงเมนูฝั่ง Admin ถ้าเป็น Admin */}
+          {isAdmin ? (
             <>
-              <a href="/status" className="flex items-center justify-between px-6 py-4 text-gray-700 hover:bg-gray-50 transition-colors border-b border-gray-50"><div className="flex items-center gap-4"><Clock size={20} className="text-gray-500" /><span className="font-bold text-[15px]">สถานะออเดอร์ (วันนี้)</span></div><ChevronRight size={16} className="text-gray-300" /></a>
-              <a href="/history" className="flex items-center justify-between px-6 py-4 text-gray-700 hover:bg-gray-50 transition-colors border-b border-gray-50"><div className="flex items-center gap-4"><ClipboardList size={20} className="text-gray-500" /><span className="font-bold text-[15px]">ประวัติการสั่งซื้อ</span></div><ChevronRight size={16} className="text-gray-300" /></a>
-              <a href="/profile" className="flex items-center justify-between px-6 py-4 text-gray-700 hover:bg-gray-50 transition-colors border-b border-gray-50"><div className="flex items-center gap-4"><User size={20} className="text-gray-500" /><span className="font-bold text-[15px]">แก้ไขข้อมูลส่วนตัว</span></div><ChevronRight size={16} className="text-gray-300" /></a>
+              <a href="/admin/dashboard" className="flex items-center justify-between px-6 py-4 text-gray-700 hover:bg-purple-50 transition-colors border-b border-gray-50">
+                <div className="flex items-center gap-4"><LayoutDashboard size={20} className="text-gray-500" /><span className="font-bold text-[15px]">แดชบอร์ด</span></div>
+                <ChevronRight size={16} className="text-gray-300" />
+              </a>
+              <a href="/admin" className="flex items-center justify-between px-6 py-4 text-gray-700 hover:bg-purple-50 transition-colors border-b border-gray-50">
+                <div className="flex items-center gap-4"><Store size={20} className="text-gray-500" /><span className="font-bold text-[15px]">หน้าร้าน (POS)</span></div>
+                <ChevronRight size={16} className="text-gray-300" />
+              </a>
+              <a href="/admin/menu-management" className="flex items-center justify-between px-6 py-4 text-gray-700 hover:bg-purple-50 transition-colors border-b border-gray-50">
+                <div className="flex items-center gap-4"><Utensils size={20} className="text-gray-500" /><span className="font-bold text-[15px]">จัดการเมนูอาหาร</span></div>
+                <ChevronRight size={16} className="text-gray-300" />
+              </a>
+              <a href="/admin/customers" className="flex items-center justify-between px-6 py-4 text-gray-700 hover:bg-purple-50 transition-colors border-b border-gray-50">
+                <div className="flex items-center gap-4"><Users size={20} className="text-gray-500" /><span className="font-bold text-[15px]">ข้อมูลลูกค้า</span></div>
+                <ChevronRight size={16} className="text-gray-300" />
+              </a>
+              <a href="/admin/settings" className="flex items-center justify-between px-6 py-4 text-gray-700 hover:bg-purple-50 transition-colors border-b border-gray-50">
+                <div className="flex items-center gap-4"><Settings size={20} className="text-gray-500" /><span className="font-bold text-[15px]">ตั้งค่าร้านค้า</span></div>
+                <ChevronRight size={16} className="text-gray-300" />
+              </a>
+            </>
+          ) : (
+            /* 🟢 แสดงเมนูฝั่ง User ถ้าเป็น User ปกติ */
+            <>
+              <a href="/menu" className="flex items-center justify-between px-6 py-4 text-gray-700 hover:bg-orange-50 transition-colors border-b border-gray-50">
+                <div className="flex items-center gap-4"><ShoppingBag size={20} className="text-gray-500" /><span className="font-bold text-[15px]">เมนูอาหาร</span></div>
+                <ChevronRight size={16} className="text-gray-300" />
+              </a>
+              {isLoggedIn && (
+                <>
+                  <a href="/status" className="flex items-center justify-between px-6 py-4 text-gray-700 hover:bg-orange-50 transition-colors border-b border-gray-50">
+                    <div className="flex items-center gap-4"><Clock size={20} className="text-gray-500" /><span className="font-bold text-[15px]">สถานะออเดอร์ (วันนี้)</span></div>
+                    <ChevronRight size={16} className="text-gray-300" />
+                  </a>
+                  <a href="/history" className="flex items-center justify-between px-6 py-4 text-gray-700 hover:bg-orange-50 transition-colors border-b border-gray-50">
+                    <div className="flex items-center gap-4"><ClipboardList size={20} className="text-gray-500" /><span className="font-bold text-[15px]">ประวัติการสั่งซื้อ</span></div>
+                    <ChevronRight size={16} className="text-gray-300" />
+                  </a>
+                  <a href="/profile" className="flex items-center justify-between px-6 py-4 text-gray-700 hover:bg-orange-50 transition-colors border-b border-gray-50">
+                    <div className="flex items-center gap-4"><User size={20} className="text-gray-500" /><span className="font-bold text-[15px]">แก้ไขข้อมูลส่วนตัว</span></div>
+                    <ChevronRight size={16} className="text-gray-300" />
+                  </a>
+                </>
+              )}
             </>
           )}
         </div>
@@ -139,11 +188,11 @@ const Navbar = () => {
               </div>
             </div>
             <div className="pt-16 px-6 text-center bg-white">
-              <h2 className="text-[20px] font-black text-gray-900 mb-2">{shopInfo?.name || 'แม่ครัวตัวกลม'}</h2>
+              <h2 className="text-[20px] font-black text-gray-900 mb-2 tracking-tight">{shopInfo?.name || 'แม่ครัวตัวกลม'}</h2>
               <div className="flex justify-center mb-6">
                 <span className={`px-4 py-1.5 rounded-full text-[12px] font-bold flex items-center gap-2 ${shopStatus?.isOpenNow ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
                   <span className={`w-2 h-2 rounded-full ${shopStatus?.isOpenNow ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></span>
-                  {shopStatus?.isOpenNow ? 'เปิดให้บริการ (Open)' : 'ปิดให้บริการ'}
+                  {shopStatus?.isOpenNow ? 'เปิดให้บริการ (Open)' : shopStatus?.reason || 'ปิดให้บริการ'}
                 </span>
               </div>
               <div className="space-y-3 mb-8 px-2 text-left">
