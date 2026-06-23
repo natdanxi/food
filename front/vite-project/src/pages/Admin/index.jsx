@@ -9,13 +9,12 @@ import {
 import Swal from 'sweetalert2';
 import { API_URL } from '../../api';
 
-// 🟢 ปรับเปลี่ยนกลุ่มเส้นทาง (Path) ให้ชี้เข้าไปในโฟลเดอร์ย่อย Orders ทั้งหมดตามโครงสร้างจริง
 import OrdersHeader from './Orders/OrdersHeader';
 import POSProductGrid from './Orders/POSProductGrid';
 import POSCartSidebar from './Orders/POSCartSidebar';
 import QueueTabs from './Orders/QueueTabs';
 import OrderCard from './Orders/OrderCard';
-import Modal from '../../../components/ui/Modal';
+import Modal from '../../components/ui/Modal';
 
 const REJECT_REASONS = ['วัตถุดิบหมด', 'ร้านกำลังจะปิด', 'ออเดอร์เยอะทำไม่ทัน', 'ลูกค้าติดต่อขอยกเลิก'];
 
@@ -30,7 +29,6 @@ export default function AdminOrders() {
   const [rejectReason, setRejectReason] = useState('');
   const [viewSlipImage, setViewSlipImage] = useState(null);
 
-  // ดึงสถานะเริ่มต้นจาก localStorage ทันทีเพื่อกัน UI กระพริบดีดกลับตอนเปลี่ยนหน้า
   const [isOpen, setIsOpen] = useState(() => {
     const saved = localStorage.getItem('shopIsOpen');
     return saved !== null ? JSON.parse(saved) : true;
@@ -69,7 +67,6 @@ export default function AdminOrders() {
       
       const currentPendingCount = res.data.filter(o => o.status === 'pending').length;
       
-      // ระบบแจ้งเตือนเสียง Real-time เมื่อมีคำสั่งซื้อใหม่เข้ามา
       if (!isFirstLoad.current && currentPendingCount > prevPendingCount.current) {
           const audio = new Audio('https://actions.google.com/sounds/v1/alarms/store_door_chime.ogg');
           audio.play().catch(e => console.log('Audio error:', e));
@@ -87,10 +84,9 @@ export default function AdminOrders() {
 
   const fetchShopStatus = async () => {
     try { 
-      const res = await axios.get(`${API_URL}/api/shop/status`); 
-      const shopOpen = res.data.isOpenNow ?? res.data.isOpen ?? true;
-      setIsOpen(shopOpen); 
-      localStorage.setItem('shopIsOpen', JSON.stringify(shopOpen));
+      const res = await axios.get(`${API_URL}/api/shop`); 
+      setIsOpen(res.data.isOpen !== false); 
+      localStorage.setItem('shopIsOpen', JSON.stringify(res.data.isOpen !== false));
     } catch (err) { console.error(err); }
   };
 
@@ -98,18 +94,20 @@ export default function AdminOrders() {
     try { const res = await axios.get(`${API_URL}/api/category`); setCategories(res.data); } catch (err) {}
   };
 
+  // 🟢 แก้ไขจุดนี้: แปลงข้อมูลเป็น FormData เพื่อให้หลังบ้านยอมรับการเซฟลงฐานข้อมูล
   const toggleShopOpen = async () => {
     setIsTogglingOpen(true);
     try {
-      const currentShopRes = await axios.get(`${API_URL}/api/shop`);
       const nextStatus = !isOpen;
       
-      await axios.put(`${API_URL}/api/shop`, { 
-        isOpenNow: nextStatus,
-        isOpen: nextStatus, 
-        name: currentShopRes.data?.shopName || 'แม่ครัวตัวกลม' 
-      }, { 
-        headers: { Authorization: `Bearer ${token}` } 
+      const formData = new FormData();
+      formData.append('isOpen', nextStatus);
+
+      await axios.put(`${API_URL}/api/shop`, formData, { 
+        headers: { 
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data'
+        } 
       });
       
       setIsOpen(nextStatus);
@@ -186,10 +184,11 @@ export default function AdminOrders() {
   const filteredOrders = orders.filter(o => o.status === activeTab);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-76px)] bg-[#F1F3F5] -m-4 sm:-m-6">
+    // 🟢 แก้ไขบรรทัดนี้: ลบ fixed ออก ใช้กรอบโค้งมนสวยงามให้อยู่ภายในโครงสร้าง Admin ไม่ทับ Navbar ด้านบน
+    <div className="flex flex-col bg-white rounded-[24px] shadow-sm border border-gray-200 overflow-hidden h-[calc(100vh-100px)] relative z-10">
       <OrdersHeader appMode={appMode} setAppMode={setAppMode} pendingCount={orders.filter(o => o.status === 'pending').length} currentTime={currentTime} isOpen={isOpen} toggleShopOpen={toggleShopOpen} isTogglingOpen={isTogglingOpen} />
 
-      <div className="flex-1 flex overflow-hidden w-full">
+      <div className="flex-1 flex overflow-hidden w-full bg-[#F1F3F5]">
         {appMode === 'pos' && (
           <div className="flex-1 flex w-full animate-in fade-in duration-300">
             <POSProductGrid products={products} categories={categories} activeCategory={activeCategory} setActiveCategory={setActiveCategory} searchTerm={searchTerm} setSearchTerm={setSearchTerm} openProductModal={openProductModal} />

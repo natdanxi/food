@@ -16,16 +16,22 @@ const Navbar = () => {
   const isLoggedIn = !!token;
 
   useEffect(() => {
-    // ฟังก์ชันดึงสถานะร้าน 
+    // 🟢 แก้ไข: ให้หน้าเว็บของลูกค้าตรงกับสวิตช์เปิด-ปิดที่แอดมินเพิ่งตั้งค่า 100%
     const fetchShopInfo = async () => {
       try {
-        const res = await axios.get(`${API_URL}/api/shop/status`);
-        setShopStatus(res.data);
-        if (res.data.shop) setShopInfo(res.data.shop);
+        const res = await axios.get(`${API_URL}/api/shop`);
+        const shop = res.data || {};
+        setShopInfo(shop);
+        
+        const isCurrentlyOpen = shop.isOpen !== false;
+
+        setShopStatus({
+          isOpenNow: isCurrentlyOpen,
+          reason: isCurrentlyOpen ? '' : 'แอดมินปิดรับออเดอร์ชั่วคราว'
+        });
       } catch (err) { console.error("Failed to fetch shop status:", err); }
     };
 
-    // ดึงข้อมูล User
     const fetchUserInfo = async () => {
       if (isLoggedIn) {
         try {
@@ -40,12 +46,10 @@ const Navbar = () => {
     fetchShopInfo();
     fetchUserInfo();
 
-    // ดึงข้อมูลอัปเดตร้านค้าทุกๆ 5 วินาที (Real-time)
     const interval = setInterval(() => {
       fetchShopInfo();
     }, 5000);
 
-    // ล้างการตั้งเวลาออกเมื่อปิดหน้าเว็บ
     return () => clearInterval(interval);
 
   }, [isLoggedIn, token]);

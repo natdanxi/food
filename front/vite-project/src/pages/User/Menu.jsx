@@ -11,7 +11,6 @@ export default function Menu() {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCategory, setActiveCategory] = useState('ทั้งหมด');
   
-  // State สถานะร้านค้า
   const [shopStatus, setShopStatus] = useState({ isOpenNow: true, reason: '' });
 
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -51,16 +50,17 @@ export default function Menu() {
     };
     fetchData();
 
-    // 🟢 แก้ไขจุดรับค่าใน fetchShopStatus เพื่อแก้อาการปุ่มสีส้มค้าง
+    // 🟢 แก้ไข: อ่านค่าเปิดร้านโดยตีความว่า "ถ้าไม่ได้ปิดแบบเจาะจง ให้ถือว่าเปิดเสมอ"
     const fetchShopStatus = async () => {
       try {
-        const statusRes = await axios.get(`${API_URL}/api/shop/status`);
-        // ทำการ Fallback เช็คตัวแปรทุกมิติที่เป็นไปได้จาก API
-        const isShopOpen = statusRes.data.isOpenNow ?? statusRes.data.isOpen ?? statusRes.data.isOpenNow === true;
+        const res = await axios.get(`${API_URL}/api/shop`);
+        const shop = res.data || {};
         
+        const isCurrentlyOpen = shop.isOpen !== false;
+
         setShopStatus({
-          isOpenNow: isShopOpen,
-          reason: statusRes.data.reason || 'นอกเวลาทำการ'
+          isOpenNow: isCurrentlyOpen,
+          reason: isCurrentlyOpen ? '' : 'แอดมินปิดรับออเดอร์ชั่วคราว'
         });
       } catch (err) { 
         console.error(err); 
@@ -74,7 +74,6 @@ export default function Menu() {
   }, []);
 
   const handleOpenModal = (product) => {
-    // 1. ถ้าร้านปิด (เช็คสถานะร้านที่ถูกแก้ไขให้ชัวร์)
     if (!shopStatus.isOpenNow) {
       Swal.fire({
         title: 'ร้านปิดให้บริการ',
@@ -85,7 +84,6 @@ export default function Menu() {
       return;
     }
 
-    // 2. ถ้าเมนูหมด
     if (!product.isAvailable) {
       Swal.fire({
         title: 'สินค้าหมด',
@@ -96,7 +94,6 @@ export default function Menu() {
       return;
     }
 
-    // 3. ถ้าเป็นผู้เยี่ยมชม (Guest)
     const token = localStorage.getItem('token');
     if (!token) {
       Swal.fire({
