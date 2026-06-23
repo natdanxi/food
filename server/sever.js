@@ -19,14 +19,14 @@ const adminOrderRouter = require('./routes/adminOrder');
 const userOrderRouter = require('./routes/userOrder');   
 
 // Routes Mounting
-app.use('/api', authRouter);
+// 🟢 แก้ไขบรรทัดนี้: เติม /auth เข้าไปเพื่อให้ตรงกับที่หน้าบ้านเรียกมา
+app.use('/api/auth', authRouter);
+
 app.use('/api', categoryRouter);
 app.use('/api', productRouter);
 app.use('/api', shopRouter);
 app.use('/api', adminOrderRouter);
 app.use('/api/user', userRouter); 
-
-// 🟢 แก้ไขตรงนี้แล้ว เอาคำว่า /user ออก
 app.use('/api', userOrderRouter); 
 
 // Static Files
