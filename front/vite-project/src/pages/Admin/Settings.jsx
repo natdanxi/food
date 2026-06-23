@@ -1,29 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { 
-  Store, Clock, MapPin, Phone, UploadCloud, Trash2, QrCode 
-} from 'lucide-react';
+import { Store, Clock, MapPin, Phone, UploadCloud, Trash2, QrCode } from 'lucide-react';
 import { API_URL } from '../../api';
-
+import Navbar from '../../components/Navbar.jsx';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 
-// ==========================================
-// 🧠 HELPERS
-// ==========================================
+// 🟢 ยึดตาม Backend 100% (เช็คค่า Boolean จาก isOpen)
 export function isShopOpen(openTime, closeTime, isOpen) {
-  if (!isOpen) return false;
-  if (!openTime || !closeTime) return true; 
-
-  const now = new Date();
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
-
-  const [openH, openM] = openTime.split(':').map(Number);
-  const [closeH, closeM] = closeTime.split(':').map(Number);
-  const openMinutes  = openH  * 60 + openM;
-  const closeMinutes = closeH * 60 + closeM;
-
-  if (closeMinutes < openMinutes) return currentMinutes >= openMinutes || currentMinutes <= closeMinutes;
-  return currentMinutes >= openMinutes && currentMinutes <= closeMinutes;
+  return isOpen === true || String(isOpen) === 'true';
 }
 
 export function formatThaiTime(timeStr) {
@@ -32,11 +16,8 @@ export function formatThaiTime(timeStr) {
   return `${h}:${m} น.`;
 }
 
-// ==========================================
-// 🎨 SUB-COMPONENTS
-// ==========================================
 const LogoSection = ({ shopData, logoPreview, logoInputRef, setLogoFile, setLogoPreview, setRemoveLogo, setDeleteConfirm }) => (
-  <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden mb-6">
+  <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden mb-6 mt-6">
     <div className="h-40 bg-gradient-to-r from-orange-400 to-orange-500"></div>
     <div className="flex flex-col items-center -mt-20 relative z-10 px-4 pb-6">
       <div className="w-40 h-40 bg-white rounded-full p-3 shadow-xl border-4 border-white">
@@ -74,9 +55,6 @@ const GeneralInfoSection = ({ shopData, setShopData }) => (
   </div>
 );
 
-// ==========================================
-// 🚀 MAIN COMPONENT
-// ==========================================
 export default function ShopSettings() {
   const [shopData, setShopData] = useState({ shopName: '', phone: '', address: '', openTime: '08:30', closeTime: '16:00', isOpen: true });
   
@@ -101,8 +79,6 @@ export default function ShopSettings() {
         if (res.data) {
           setShopData({ shopName: res.data.shopName || '', phone: res.data.phone || '', address: res.data.address || '', openTime: res.data.openTime || '08:30', closeTime: res.data.closeTime || '16:00', isOpen: res.data.isOpen ?? true });
           if (res.data.logo) setLogoPreview(`${API_URL}/uploads/${res.data.logo}`);
-          
-          // 🟢 พยายามดึงรูป QR แบบตรงๆ (ดึงทั้ง jpg และ png)
           checkQrImage();
         }
       } catch (err) { console.error(err); }
@@ -111,7 +87,6 @@ export default function ShopSettings() {
   }, []);
 
   const checkQrImage = () => {
-    // ใช้วิธีลองดึงไฟล์ภาพ ถ้ารูปมีอยู่จะแสดงได้ ถ้า Error แสดงว่าไม่มี
     const qrUrl = `${API_URL}/uploads/shop-qrcode.jpg?t=${new Date().getTime()}`;
     const img = new Image();
     img.onload = () => setQrPreview(qrUrl);
@@ -129,7 +104,7 @@ export default function ShopSettings() {
     setStatusModal({ show: true, type: 'loading', title: 'โปรดรอสักครู่', message: 'กำลังบันทึกข้อมูล...' });
     try {
       const formData = new FormData();
-      formData.append('name', shopData.shopName); // 🟢 ให้ตรงกับ backend (รับตัวแปร name)
+      formData.append('name', shopData.shopName); 
       formData.append('phone', shopData.phone);
       formData.append('address', shopData.address); 
       formData.append('openTime', shopData.openTime);
@@ -145,9 +120,7 @@ export default function ShopSettings() {
       setStatusModal({ show: true, type: 'success', title: 'สำเร็จ!', message: 'บันทึกข้อมูลร้านค้าเรียบร้อยแล้ว' });
       setTimeout(() => setStatusModal({ show: false }), 2000);
       
-      // อัปเดตรูป QR หลังจากเซฟ
       if (qrFile || removeQr) setTimeout(checkQrImage, 500);
-
     } catch (err) { 
         console.error(err);
         setStatusModal({ show: true, type: 'error', title: 'เกิดข้อผิดพลาด', message: 'บันทึกข้อมูลไม่สำเร็จ' }); 
@@ -163,8 +136,9 @@ export default function ShopSettings() {
   const shopCurrentlyOpen = isShopOpen(shopData.openTime, shopData.closeTime, shopData.isOpen);
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 pb-20">
-      <div className="max-w-2xl mx-auto">
+    <div className="bg-gray-50 min-h-screen pb-20">
+      <Navbar />
+      <div className="max-w-2xl mx-auto px-4">
         <LogoSection shopData={shopData} logoPreview={logoPreview} logoInputRef={logoInputRef} setLogoFile={setLogoFile} setLogoPreview={setLogoPreview} setRemoveLogo={setRemoveLogo} setDeleteConfirm={setDeleteConfirm} />
 
         <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 space-y-6 mb-6">
@@ -186,12 +160,11 @@ export default function ShopSettings() {
             </div>
             <div className={`rounded-xl px-4 py-3 text-sm font-bold flex items-center gap-2 ${shopCurrentlyOpen ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-600 border border-red-200'}`}>
               <span>{shopCurrentlyOpen ? '🟢' : '🔴'}</span>
-              ขณะนี้ร้าน{shopCurrentlyOpen ? 'เปิดรับออเดอร์' : 'ปิดรับออเดอร์'} ({formatThaiTime(shopData.openTime)} – {formatThaiTime(shopData.closeTime)})
+              ขณะนี้ร้าน{shopCurrentlyOpen ? 'เปิดรับออเดอร์' : 'ปิดรับออเดอร์'}
             </div>
           </div>
         </div>
 
-        {/* QR Code Section */}
         <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 mb-6 space-y-4">
           <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest border-b pb-3">ข้อมูลการชำระเงิน</h3>
           <p className="text-sm font-bold text-gray-700 flex items-center gap-2"><QrCode size={18} className="text-orange-500" /> รูป QR Code สำหรับรับเงิน</p>
@@ -205,7 +178,6 @@ export default function ShopSettings() {
           <input type="file" ref={qrInputRef} className="hidden" accept="image/*" onChange={(e) => {setQrFile(e.target.files[0]); setQrPreview(URL.createObjectURL(e.target.files[0])); setRemoveQr(false);}} />
         </div>
 
-        {/* Shop Status Toggle */}
         <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 mb-6">
           <div className="flex justify-between items-center">
             <div>

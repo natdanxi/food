@@ -47,7 +47,8 @@ const OrderStatus = () => {
 
   const fetchStatus = useCallback(async () => {
     try {
-      const res = await axios.get(`${API_URL}/api/user/history`, { headers: { Authorization: `Bearer ${token}` } });
+      // 🟢 แก้ไข: ยิงไปที่ /api/history (ลบคำว่า /user ออก)
+      const res = await axios.get(`${API_URL}/api/history`, { headers: { Authorization: `Bearer ${token}` } });
       const activeOrders = res.data.filter(o => o.status?.toLowerCase() === 'pending' || o.status?.toLowerCase() === 'cooking');
       const sortedOrders = activeOrders.sort((a, b) => (b.ordersId || b.id) - (a.ordersId || a.id));
       
@@ -87,7 +88,8 @@ const OrderStatus = () => {
 
   const confirmCancelOrder = async () => {
     try {
-      await axios.put(`${API_URL}/api/user/cancel-order`, {
+      // 🟢 แก้ไข: ยิงไปที่ /api/cancel-order (ลบคำว่า /user ออก)
+      await axios.put(`${API_URL}/api/cancel-order`, {
         id: orderToCancel, rejectReason: `[ลูกค้ายกเลิกเอง] ${cancelReason || 'ไม่ระบุเหตุผล'}` 
       }, { headers: { Authorization: `Bearer ${token}` } });
       
@@ -139,8 +141,6 @@ const OrderStatus = () => {
     <div className="min-h-screen bg-gray-50/50 font-sans">
       <Navbar />
       <div className="p-4 md:p-6 max-w-lg mx-auto pb-24 relative">
-        
-        {/* 🟢 นำคำว่าดูประวัติทั้งหมดออกแล้ว */}
         <div className="mb-6 flex flex-row items-center justify-between gap-2">
             <h2 className="text-xl sm:text-2xl font-black text-gray-800 flex items-center gap-2 sm:gap-3">
                 <span className="bg-orange-100 p-2 rounded-xl text-orange-600 shrink-0"><Clock size={24}/></span>

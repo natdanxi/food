@@ -85,10 +85,17 @@ export default function Cart() {
     const token = localStorage.getItem('token');
     if (!token) return navigate('/login');
 
+    if (paymentMethod === 'transfer' && !slipFile) {
+        Swal.fire('แจ้งเตือน', 'กรุณาแนบสลิปโอนเงินก่อนยืนยันค่ะ', 'warning');
+        return;
+    }
+
     setIsSubmitting(true);
     try {
-      let payload;
-      const headers = { Authorization: `Bearer ${token}` };
+      const headers = { 
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'multipart/form-data'
+      };
 
       const formattedItems = cartItems.map(item => ({
         id: item.product_id || item.id, 
@@ -100,33 +107,26 @@ export default function Cart() {
 
       const overallNote = cartItems.map(item => item.note).filter(Boolean).join(' | ');
 
+      const formData = new FormData();
+      formData.append('items', JSON.stringify(formattedItems));
+      formData.append('totalPrice', totalPrice);
+      formData.append('totalAmount', totalPrice);
+      formData.append('paymentMethod', paymentMethod);
+      formData.append('orderType', 'online');
+      formData.append('note', overallNote);
+      
       if (paymentMethod === 'transfer' && slipFile) {
-        payload = new FormData();
-        payload.append('items', JSON.stringify(formattedItems));
-        payload.append('totalPrice', totalPrice);
-        payload.append('totalAmount', totalPrice);
-        payload.append('paymentMethod', paymentMethod);
-        payload.append('orderType', 'online');
-        payload.append('note', overallNote);
-        payload.append('slip', slipFile);
-      } else {
-        payload = {
-          items: formattedItems,
-          totalPrice: totalPrice,
-          totalAmount: totalPrice,
-          paymentMethod: paymentMethod,
-          orderType: 'online',
-          note: overallNote
-        };
+        formData.append('slip', slipFile); 
       }
 
-      await axios.post(`${API_URL}/api/user/order`, payload, { headers });
+      await axios.post(`${API_URL}/api/order`, formData, { headers });
       
       localStorage.removeItem('cart');
       setShowPaymentModal(false);
       setCartItems([]);
       Swal.fire({ title: 'สำเร็จ!', text: 'ส่งคำสั่งซื้อเรียบร้อยแล้ว', icon: 'success', timer: 2000, showConfirmButton: false }).then(() => { navigate('/status'); });
     } catch (err) {
+      console.error(err);
       Swal.fire('สั่งซื้อไม่สำเร็จ', err.response?.data?.message || 'เกิดข้อผิดพลาดในการสร้างออเดอร์', 'error');
     } finally { setIsSubmitting(false); }
   };
@@ -185,7 +185,7 @@ export default function Cart() {
           </div>
           {paymentMethod === 'transfer' && (
               <div className="mt-4 p-3 bg-blue-50 text-blue-600 text-[12px] font-bold rounded-xl flex items-center gap-2 animate-in fade-in">
-                  <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div> กรุณาเตรียมสลิปโอนเงินเพื่อแสดงตอนรับอาหาร
+                  <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div> กรุณาเตรียมสลิปโอนเงินเพื่อแนบตอนสั่งอาหาร
               </div>
           )}
         </div>
@@ -198,37 +198,6 @@ export default function Cart() {
           </div>
       </div>
 
-      {/* Modal แก้ไข Add-ons */}
-      {editModalOpen && (
-        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-[150] flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white w-full max-w-[420px] rounded-[24px] p-6 shadow-2xl relative animate-in zoom-in-95">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-[20px] font-black text-gray-900">แก้ไขรายละเอียด</h2>
-              <button onClick={() => setEditModalOpen(false)} className="p-2 bg-gray-100 hover:bg-gray-200 rounded-full text-gray-500 transition-colors"><X size={18}/></button>
-            </div>
-            <div className="mb-6 space-y-3">
-              <p className="text-[12px] font-bold text-gray-400 uppercase tracking-wide">ตัวเลือกพิเศษ (บวกเพิ่ม)</p>
-              <div className="grid grid-cols-2 gap-3">
-                {ADDONS_LIST.map((addon, i) => (
-                  <button key={i} onClick={() => setEditAddons(prev => prev.includes(addon.name) ? prev.filter(a => a !== addon.name) : [...prev, addon.name])} className={`flex justify-between border rounded-xl px-3 py-2.5 transition-all active:scale-95 ${editAddons.includes(addon.name) ? 'border-orange-500 bg-orange-50 text-orange-600' : 'border-gray-200 text-gray-600'}`}>
-                    <span className="text-[13px] font-bold">{addon.name}</span><span className="text-[12px]">+฿{addon.price}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="mb-8">
-              <p className="text-[12px] font-bold text-gray-400 uppercase tracking-wide mb-3">หมายเหตุอื่นๆ (ถ้ามี)</p>
-              <input type="text" value={editNote} onChange={e => setEditNote(e.target.value)} placeholder="เช่น ไม่เผ็ด, แยกน้ำ..." className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3.5 text-[14px] focus:outline-none focus:ring-1 focus:ring-orange-400 transition-all" />
-            </div>
-            <div className="flex gap-3">
-              <button onClick={() => setEditModalOpen(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3.5 rounded-xl transition-all">ยกเลิก</button>
-              <button onClick={saveEditDetails} className="flex-1 bg-[#ea580c] hover:bg-orange-600 text-white font-bold py-3.5 rounded-xl transition-all shadow-sm">บันทึก</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal ชำระเงิน */}
       {showPaymentModal && (
         <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-white w-full max-w-[400px] rounded-[32px] overflow-hidden shadow-2xl flex flex-col animate-in zoom-in-95 max-h-[90vh]">
@@ -255,20 +224,20 @@ export default function Cart() {
                 </div>
               </div>
               <div className="border-t border-gray-100 pt-6 text-left">
-                <p className="text-[13px] font-bold text-gray-700 mb-4">แนบหลักฐานการโอนเงิน (ไม่บังคับ)</p>
+                <p className="text-[13px] font-bold text-gray-700 mb-4">แนบหลักฐานการโอนเงิน (บังคับ)</p>
                 {!slipPreview ? (
-                  <button onClick={()=>slipInputRef.current.click()} className="w-full py-10 bg-gray-50 border-2 border-dashed border-gray-200 rounded-[24px] flex flex-col items-center gap-2 text-gray-400 hover:text-orange-500 hover:border-orange-300 hover:bg-orange-50 transition-all"><Upload size={32}/><span className="text-[13px] font-bold">กดเพื่อเลือกรูปภาพสลิป</span></button>
+                  <button onClick={()=>slipInputRef.current.click()} className="w-full py-10 bg-gray-50 border-2 border-dashed border-orange-300 rounded-[24px] flex flex-col items-center gap-2 text-orange-500 hover:text-orange-600 hover:border-orange-400 hover:bg-orange-50 transition-all"><Upload size={32}/><span className="text-[13px] font-bold">กดเพื่อแนบรูปสลิป</span></button>
                 ) : (
                   <div className="relative w-full aspect-[3/4] max-h-60 bg-gray-100 rounded-[24px] overflow-hidden border border-gray-200 shadow-inner">
                     <img src={slipPreview} className="w-full h-full object-contain" />
-                    <button onClick={()=>{setSlipFile(null); setSlipPreview(null);}} className="absolute top-3 right-3 bg-red-500 text-white p-1.5 rounded-full shadow-lg hover:bg-red-600 transition-all"><X size={16}/></button>
+                    <button onClick={() => {setSlipFile(null); setSlipPreview(null);}} className="absolute top-3 right-3 bg-red-500 text-white p-1.5 rounded-full shadow-lg hover:bg-red-600 transition-all"><X size={16}/></button>
                   </div>
                 )}
                 <input type="file" ref={slipInputRef} accept="image/*" className="hidden" onChange={(e)=>{const f=e.target.files[0]; if(f){setSlipFile(f); setSlipPreview(URL.createObjectURL(f));}}} />
               </div>
             </div>
             <div className="p-5 bg-white border-t border-gray-100 shadow-[0_-10px_20px_rgba(0,0,0,0.03)]">
-              <button onClick={confirmOrder} disabled={isSubmitting} className="w-full bg-[#ea580c] hover:bg-orange-600 text-white py-4 rounded-[16px] font-black text-[16px] shadow-lg shadow-orange-200 flex justify-center items-center gap-2 active:scale-95 transition-all">
+              <button onClick={confirmOrder} disabled={isSubmitting || (paymentMethod === 'transfer' && !slipFile)} className="w-full bg-[#ea580c] hover:bg-orange-600 disabled:bg-gray-300 text-white py-4 rounded-[16px] font-black text-[16px] shadow-lg shadow-orange-200 disabled:shadow-none flex justify-center items-center gap-2 active:scale-95 transition-all">
                 {isSubmitting ? <Loader2 className="animate-spin"/> : "ยืนยันการแจ้งโอน"}
               </button>
             </div>

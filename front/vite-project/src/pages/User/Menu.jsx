@@ -3,16 +3,14 @@ import axios from 'axios';
 import { Search, Plus, Minus, X, CheckCircle2, Star, Flame } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { API_URL } from '../../api'; 
-import Navbar from '../../components/Navbar'; 
+import Navbar from '../../components/Navbar.jsx'; 
 
 export default function Menu() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCategory, setActiveCategory] = useState('ทั้งหมด');
-  
   const [shopStatus, setShopStatus] = useState({ isOpenNow: true, reason: '' });
-
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [quantity, setQuantity] = useState(1);
   const [note, setNote] = useState('');
@@ -20,103 +18,62 @@ export default function Menu() {
   const [showSuccessToast, setShowSuccessToast] = useState(false);
 
   const addonsList = [
-    { name: 'ไข่ดาว', price: 5 }, 
-    { name: 'ไข่เจียว', price: 5 }, 
-    { name: 'พิเศษ', price: 5 }, 
-    { name: 'เพิ่มข้าว', price: 5 }
+    { name: 'ไข่ดาว', price: 5 }, { name: 'ไข่เจียว', price: 5 }, 
+    { name: 'พิเศษ', price: 5 }, { name: 'เพิ่มข้าว', price: 5 }
   ];
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [catRes, prodRes] = await Promise.all([
-          axios.get(`${API_URL}/api/category`),
-          axios.get(`${API_URL}/api/product`)
-        ]);
-
+        const [catRes, prodRes] = await Promise.all([ axios.get(`${API_URL}/api/category`), axios.get(`${API_URL}/api/product`) ]);
         const publicCategories = catRes.data.filter(cat => !cat.categoryName.includes('หน้าร้าน'));
         setCategories([{ categoryName: 'ทั้งหมด' }, ...publicCategories]);
-
         let publicProducts = prodRes.data.filter(p => !p.category?.categoryName?.includes('หน้าร้าน'));
         publicProducts.sort((a, b) => {
           if (b.isRecommended !== a.isRecommended) return b.isRecommended ? 1 : -1;
           return b.soldCount - a.soldCount;
         });
-        
         setProducts(publicProducts);
-      } catch (err) { 
-        console.error("Fetch Data Error:", err); 
-      }
+      } catch (err) { console.error("Fetch Data Error:", err); }
     };
     fetchData();
 
-    // 🟢 แก้ไข: อ่านค่าเปิดร้านโดยตีความว่า "ถ้าไม่ได้ปิดแบบเจาะจง ให้ถือว่าเปิดเสมอ"
+    // 🟢 แก้ไขตรงนี้: ลูกค้าจะเห็นสถานะร้านตามที่แอดมินเปิดสวิตช์ 100% (ไม่สนเวลา)
     const fetchShopStatus = async () => {
       try {
         const res = await axios.get(`${API_URL}/api/shop`);
         const shop = res.data || {};
-        
-        const isCurrentlyOpen = shop.isOpen !== false;
+        const isCurrentlyOpen = shop.isOpen === true || String(shop.isOpen) === 'true';
 
         setShopStatus({
           isOpenNow: isCurrentlyOpen,
           reason: isCurrentlyOpen ? '' : 'แอดมินปิดรับออเดอร์ชั่วคราว'
         });
-      } catch (err) { 
-        console.error(err); 
-      }
+      } catch (err) { console.error(err); }
     };
     
     fetchShopStatus();
     const interval = setInterval(fetchShopStatus, 5000);
     return () => clearInterval(interval);
-
   }, []);
 
   const handleOpenModal = (product) => {
     if (!shopStatus.isOpenNow) {
-      Swal.fire({
-        title: 'ร้านปิดให้บริการ',
-        text: `ขออภัยค่ะ ไม่สามารถสั่งอาหารได้ในขณะนี้\nเหตุผล: ${shopStatus.reason}`,
-        icon: 'warning',
-        confirmButtonColor: '#ea580c'
-      });
+      Swal.fire({ title: 'ร้านปิดให้บริการ', text: `ขออภัยค่ะ ไม่สามารถสั่งอาหารได้ในขณะนี้\nเหตุผล: ${shopStatus.reason}`, icon: 'warning', confirmButtonColor: '#ea580c' });
       return;
     }
-
     if (!product.isAvailable) {
-      Swal.fire({
-        title: 'สินค้าหมด',
-        text: 'ขออภัยค่ะ เมนูนี้หมดชั่วคราว',
-        icon: 'info',
-        confirmButtonColor: '#9ca3af'
-      });
+      Swal.fire({ title: 'สินค้าหมด', text: 'ขออภัยค่ะ เมนูนี้หมดชั่วคราว', icon: 'info', confirmButtonColor: '#9ca3af' });
       return;
     }
-
     const token = localStorage.getItem('token');
     if (!token) {
       Swal.fire({
-        title: 'สงวนสิทธิ์เฉพาะสมาชิก',
-        text: 'กรุณาเข้าสู่ระบบหรือสมัครสมาชิกเพื่อทำการสั่งอาหารค่ะ',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#ea580c',
-        cancelButtonColor: '#9ca3af',
-        confirmButtonText: 'เข้าสู่ระบบ',
-        cancelButtonText: 'ดูเมนูต่อ'
-      }).then((result) => {
-        if (result.isConfirmed) {
-          window.location.href = '/login'; 
-        }
-      });
+        title: 'สงวนสิทธิ์เฉพาะสมาชิก', text: 'กรุณาเข้าสู่ระบบหรือสมัครสมาชิกเพื่อทำการสั่งอาหารค่ะ', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ea580c', cancelButtonColor: '#9ca3af', confirmButtonText: 'เข้าสู่ระบบ', cancelButtonText: 'ดูเมนูต่อ'
+      }).then((result) => { if (result.isConfirmed) { window.location.href = '/login'; } });
       return; 
     }
-    
-    setSelectedProduct(product);
-    setQuantity(1);
-    setNote('');
-    setSelectedAddons([]);
+    setSelectedProduct(product); setQuantity(1); setNote(''); setSelectedAddons([]);
   };
 
   const confirmAddToCart = () => {
@@ -126,20 +83,12 @@ export default function Menu() {
     const finalNote = [addonsText, note].filter(Boolean).join(' | ');
 
     const newItem = {
-      id: selectedProduct.productId, 
-      product_id: selectedProduct.productId,
-      title: selectedProduct.title,
-      name: selectedProduct.title,
-      price: parseFloat(selectedProduct.price) + addonsPrice,
-      image: selectedProduct.image, 
-      quantity: quantity,
-      note: finalNote
+      id: selectedProduct.productId, product_id: selectedProduct.productId, title: selectedProduct.title, name: selectedProduct.title, price: parseFloat(selectedProduct.price) + addonsPrice, image: selectedProduct.image, quantity: quantity, note: finalNote
     };
 
     existingCart.push(newItem);
     localStorage.setItem('cart', JSON.stringify(existingCart));
-    setSelectedProduct(null);
-    setShowSuccessToast(true);
+    setSelectedProduct(null); setShowSuccessToast(true);
     setTimeout(() => setShowSuccessToast(false), 3000);
   };
 
@@ -152,7 +101,6 @@ export default function Menu() {
   return (
     <div className="bg-gray-50 min-h-screen pb-10">
       <Navbar />
-
       {showSuccessToast && (
         <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[200] bg-white border border-green-100 px-6 py-3 rounded-full shadow-xl flex items-center gap-3 animate-in slide-in-from-top-4 fade-in duration-300">
           <CheckCircle2 className="text-green-500" size={20} />
@@ -168,9 +116,7 @@ export default function Menu() {
 
         <div className="flex gap-3 overflow-x-auto pb-2 mb-6 scrollbar-hide">
           {categories.map((cat, idx) => (
-            <button key={idx} onClick={() => setActiveCategory(cat.categoryName)} className={`px-5 py-2.5 rounded-full text-[14px] font-bold whitespace-nowrap transition-all border ${activeCategory === cat.categoryName ? 'bg-[#ea580c] text-white border-orange-600 shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
-              {cat.categoryName}
-            </button>
+            <button key={idx} onClick={() => setActiveCategory(cat.categoryName)} className={`px-5 py-2.5 rounded-full text-[14px] font-bold whitespace-nowrap transition-all border ${activeCategory === cat.categoryName ? 'bg-[#ea580c] text-white border-orange-600 shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>{cat.categoryName}</button>
           ))}
         </div>
 
@@ -179,27 +125,18 @@ export default function Menu() {
             <div key={item.productId} onClick={() => handleOpenModal(item)} className={`bg-white rounded-[24px] overflow-hidden border border-gray-100 shadow-sm flex flex-col cursor-pointer group hover:shadow-md transition-all ${!item.isAvailable ? 'opacity-70 grayscale-[50%]' : ''}`}>
               <div className="h-48 bg-gray-100 overflow-hidden relative">
                 {item.image ? <img src={`${API_URL}/uploads/${item.image}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" /> : <div className="w-full h-full flex items-center justify-center text-gray-300">ไม่มีรูป</div>}
-                
                 <div className="absolute top-3 left-3 flex flex-col gap-1.5 z-10">
                   {item.isRecommended && <span className="bg-orange-500 text-white text-[11px] font-black px-2.5 py-1 rounded shadow-md flex items-center gap-1"><Star size={12} fill="currentColor"/> แนะนำ</span>}
                   {item.soldCount >= 10 && <span className="bg-pink-500 text-white text-[11px] font-black px-2.5 py-1 rounded shadow-md flex items-center gap-1"><Flame size={12} fill="currentColor"/> ขายดี</span>}
                 </div>
-
-                {!item.isAvailable && (
-                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-10">
-                    <span className="bg-red-500 text-white px-3 py-1.5 rounded-lg font-black text-sm border-2 border-red-400">หมดชั่วคราว</span>
-                  </div>
-                )}
+                {!item.isAvailable && (<div className="absolute inset-0 bg-black/40 flex items-center justify-center z-10"><span className="bg-red-500 text-white px-3 py-1.5 rounded-lg font-black text-sm border-2 border-red-400">หมดชั่วคราว</span></div>)}
               </div>
-              
               <div className="p-5 flex-1 flex flex-col">
                 <h3 className="text-[16px] font-bold text-gray-800 mb-2 line-clamp-1">{item.title}</h3>
                 <p className="text-[12px] text-gray-400 line-clamp-2 mb-4">{item.description || 'ไม่มีรายละเอียด'}</p>
                 <div className="mt-auto flex justify-between items-center">
                   <span className="text-[20px] font-black text-[#ea580c]">฿{item.price}</span>
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${item.isAvailable ? 'bg-[#ea580c] group-hover:bg-orange-600 text-white' : 'bg-gray-200 text-gray-400'}`}>
-                    <Plus size={18} strokeWidth={3} />
-                  </div>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${item.isAvailable ? 'bg-[#ea580c] group-hover:bg-orange-600 text-white' : 'bg-gray-200 text-gray-400'}`}><Plus size={18} strokeWidth={3} /></div>
                 </div>
               </div>
             </div>

@@ -18,7 +18,8 @@ const History = () => {
     const fetchHistory = async () => {
       try {
         setLoading(true);
-        const res = await axios.get(`${API_URL}/api/user/history`, {
+        // 🟢 แก้ไข: ยิงไปที่ /api/history (ลบคำว่า /user ออก)
+        const res = await axios.get(`${API_URL}/api/history`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         setOrders(res.data);
@@ -31,7 +32,6 @@ const History = () => {
     if(token) fetchHistory();
   }, [token]);
 
-  // 🟢 แก้ไข: ฟังก์ชันสั่งซื้ออีกครั้ง ไม่ทำการ Navigate แล้ว ให้เด้งแค่ Popup
   const handleReorder = (order) => {
     let currentCart = JSON.parse(localStorage.getItem('cart') || '[]');
     
@@ -58,7 +58,6 @@ const History = () => {
     localStorage.setItem('cart', JSON.stringify(currentCart));
     window.dispatchEvent(new Event('storage')); 
     
-    // 🟢 แจ้งเตือนเสร็จแล้วจบ ไม่เปลี่ยนหน้า
     Swal.fire({
       toast: true, position: 'top-end', icon: 'success', 
       title: 'เพิ่มเมนูลงตะกร้าแล้ว!', showConfirmButton: false, timer: 1500
