@@ -7,13 +7,14 @@ import {
   Phone, QrCode, Banknote
 } from 'lucide-react';
 import Swal from 'sweetalert2';
-import { API_URL } from '../../../api';
+import { API_URL } from '../../api';
 
-import OrdersHeader from './OrdersHeader';
-import POSProductGrid from './POSProductGrid';
-import POSCartSidebar from './POSCartSidebar';
-import QueueTabs from './QueueTabs';
-import OrderCard from './OrderCard';
+// 🟢 ปรับเปลี่ยนกลุ่มเส้นทาง (Path) ให้ชี้เข้าไปในโฟลเดอร์ย่อย Orders ทั้งหมดตามโครงสร้างจริง
+import OrdersHeader from './Orders/OrdersHeader';
+import POSProductGrid from './Orders/POSProductGrid';
+import POSCartSidebar from './Orders/POSCartSidebar';
+import QueueTabs from './Orders/QueueTabs';
+import OrderCard from './Orders/OrderCard';
 import Modal from '../../../components/ui/Modal';
 
 const REJECT_REASONS = ['วัตถุดิบหมด', 'ร้านกำลังจะปิด', 'ออเดอร์เยอะทำไม่ทัน', 'ลูกค้าติดต่อขอยกเลิก'];
@@ -29,7 +30,7 @@ export default function AdminOrders() {
   const [rejectReason, setRejectReason] = useState('');
   const [viewSlipImage, setViewSlipImage] = useState(null);
 
-  // 🟢 ดึงสถานะเริ่มต้นจาก localStorage ทันทีเพื่อกัน UI กระพริบดีดกลับตอนเปลี่ยนหน้า
+  // ดึงสถานะเริ่มต้นจาก localStorage ทันทีเพื่อกัน UI กระพริบดีดกลับตอนเปลี่ยนหน้า
   const [isOpen, setIsOpen] = useState(() => {
     const saved = localStorage.getItem('shopIsOpen');
     return saved !== null ? JSON.parse(saved) : true;
@@ -68,7 +69,7 @@ export default function AdminOrders() {
       
       const currentPendingCount = res.data.filter(o => o.status === 'pending').length;
       
-      // 🟢 ระบบแจ้งเตือนเสียง Real-time เมื่อมีคำสั่งซื้อใหม่เข้ามา
+      // ระบบแจ้งเตือนเสียง Real-time เมื่อมีคำสั่งซื้อใหม่เข้ามา
       if (!isFirstLoad.current && currentPendingCount > prevPendingCount.current) {
           const audio = new Audio('https://actions.google.com/sounds/v1/alarms/store_door_chime.ogg');
           audio.play().catch(e => console.log('Audio error:', e));
@@ -87,7 +88,6 @@ export default function AdminOrders() {
   const fetchShopStatus = async () => {
     try { 
       const res = await axios.get(`${API_URL}/api/shop/status`); 
-      // ดักจับสถานะจาก Backend ทุกรูปแบบที่เป็นไปได้
       const shopOpen = res.data.isOpenNow ?? res.data.isOpen ?? true;
       setIsOpen(shopOpen); 
       localStorage.setItem('shopIsOpen', JSON.stringify(shopOpen));
@@ -98,14 +98,12 @@ export default function AdminOrders() {
     try { const res = await axios.get(`${API_URL}/api/category`); setCategories(res.data); } catch (err) {}
   };
 
-  // 🟢 ปรับฟังก์ชันเปิด-ปิดร้านให้ยิง JSON Payload ตรงตามโครงสร้างที่ฐานข้อมูลอัปเดตจริง
   const toggleShopOpen = async () => {
     setIsTogglingOpen(true);
     try {
       const currentShopRes = await axios.get(`${API_URL}/api/shop`);
       const nextStatus = !isOpen;
       
-      // ส่ง Object ไปให้หลังบ้านบันทึก
       await axios.put(`${API_URL}/api/shop`, { 
         isOpenNow: nextStatus,
         isOpen: nextStatus, 
@@ -216,7 +214,6 @@ export default function AdminOrders() {
         )}
       </div>
 
-      {/* Modal จัดการวัตถุดิบและของหวานคงเดิม */}
       {selectedProduct && (
         <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-[150] flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-white w-full max-w-[420px] rounded-[24px] p-6 shadow-2xl relative animate-in zoom-in-95">
@@ -224,7 +221,6 @@ export default function AdminOrders() {
               <h2 className="text-[20px] font-black text-gray-900 line-clamp-1">{selectedProduct.title}</h2>
               <button onClick={() => setSelectedProduct(null)} className="p-2 bg-gray-100 hover:bg-gray-200 rounded-full text-gray-500 transition-colors shrink-0"><X size={18}/></button>
             </div>
-            {/* โค้ดภายในคงเดิม */}
             <div className="flex items-center gap-4">
               <div className="flex items-center justify-between border border-gray-200 rounded-xl px-2 py-2 w-[110px] shrink-0">
                 <button onClick={() => setTempQty(Math.max(1, tempQty - 1))} className="text-gray-400 hover:text-gray-800 p-1"><Minus size={18}/></button>

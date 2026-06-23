@@ -12,7 +12,6 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
-  // State สำหรับ Popup
   const [showSuccess, setShowSuccess] = useState(false);
   const [userName, setUserName] = useState('');
 
@@ -24,14 +23,18 @@ const Login = () => {
     setError('');
 
     try {
-      //  ใช้ API_URL และ path /login
-      const res = await axios.post(`${API_URL}/login`, form);
+      // 🟢 แกะค่า email และ password ออกมาจากก้อน form ให้ถูกต้องก่อนส่งไปหลังบ้าน
+      const res = await axios.post(`${API_URL}/api/auth/login`, { 
+        email: form.email, 
+        password: form.password 
+      });
+      
       localStorage.setItem('token', res.data.token);
       
-      const user = res.data.payload.user;
-      const role = user.role;
+      const user = res.data.payload?.user || res.data.user;
+      const role = user?.role;
 
-      setUserName(user.firstname);
+      setUserName(user?.firstname || 'ลูกค้า');
       setShowSuccess(true); 
 
       setTimeout(() => {
@@ -49,19 +52,15 @@ const Login = () => {
     }
   };
 
-  // ✅ ฟังก์ชันสำหรับปุ่ม Guest (ไม่ต้องใช้รหัส)
   const handleGuestAccess = () => {
-    // ไม่ต้องเช็คอะไรเลย พาไปหน้าเมนูทันที
     navigate('/menu');
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#FFF8F0] p-4 font-sans relative">
-      
-      {/* Popup เมื่อ Login สำเร็จ */}
       {showSuccess && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
-           <div className="bg-white p-8 rounded-3xl shadow-2xl flex flex-col items-center justify-center w-80 text-center animate-in zoom-in-95 duration-300">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+           <div className="bg-white p-8 rounded-3xl shadow-2xl flex flex-col items-center justify-center w-80 text-center">
               <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4 text-green-500 shadow-sm">
                  <Check size={36} strokeWidth={4} />
               </div>
@@ -74,7 +73,6 @@ const Login = () => {
         </div>
       )}
 
-      {/* --- กล่อง Login --- */}
       <div className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-md border border-orange-100">
         <div className="flex flex-col items-center mb-6">
           <div className="w-16 h-16 bg-orange-500 rounded-full flex items-center justify-center text-white shadow-lg shadow-orange-200 mb-4">
@@ -89,12 +87,12 @@ const Login = () => {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="relative">
              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"><Mail size={20} /></div>
-             <input type="email" name="email" required className="w-full pl-12 pr-4 py-3 bg-gray-50 border rounded-xl focus:ring-2 focus:ring-orange-200 transition outline-none" placeholder="อีเมล" onChange={handleChange} />
+             <input type="email" name="email" value={form.email} required className="w-full pl-12 pr-4 py-3 bg-gray-50 border rounded-xl focus:ring-2 focus:ring-orange-200 transition outline-none" placeholder="อีเมล" onChange={handleChange} />
           </div>
 
           <div className="relative">
              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"><Lock size={20} /></div>
-             <input type={showPassword ? "text" : "password"} name="password" required className="w-full pl-12 pr-12 py-3 bg-gray-50 border rounded-xl focus:ring-2 focus:ring-orange-200 transition outline-none" placeholder="รหัสผ่าน" onChange={handleChange} />
+             <input type={showPassword ? "text" : "password"} name="password" value={form.password} required className="w-full pl-12 pr-12 py-3 bg-gray-50 border rounded-xl focus:ring-2 focus:ring-orange-200 transition outline-none" placeholder="รหัสผ่าน" onChange={handleChange} />
              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                {showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}
              </button>
@@ -105,18 +103,16 @@ const Login = () => {
           </button>
         </form>
 
-        {/* เส้นกั้น */}
         <div className="relative my-6">
             <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200"></div></div>
             <div className="relative flex justify-center text-sm"><span className="px-2 bg-white text-gray-500">หรือ</span></div>
         </div>
 
-        {/* ✅ ปุ่ม Guest (เข้าถึงแบบไม่ใช้รหัส) */}
         <button 
           type="button"
           onClick={handleGuestAccess}
           className="w-full py-3 bg-white border-2 border-orange-100 text-orange-600 font-bold rounded-xl hover:bg-orange-50 hover:border-orange-200 transition-all flex items-center justify-center gap-2"
-        >Guest </button>
+        >Guest</button>
 
         <div className="mt-6 text-center text-sm text-gray-500">
             ยังไม่มีบัญชี? <Link to="/register" className="text-orange-600 font-bold hover:underline">สมัครสมาชิกเลย</Link>
