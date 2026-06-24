@@ -1,3 +1,4 @@
+// จัดการเส้นทาง API สำหรับการสมัครสมาชิก (/register), เข้าสู่ระบบ (/login), และจัดการผู้ใช้งาน (/users)
 const express = require('express');
 const router = express.Router();
 

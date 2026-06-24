@@ -1,3 +1,4 @@
+// จัดการเส้นทาง API ฝั่งแอดมิน สำหรับดึงและอัปเดตสถานะออเดอร์
 const express = require('express');
 const router = express.Router();
 const { PrismaClient } = require('@prisma/client');

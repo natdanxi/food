@@ -1,3 +1,4 @@
+// จัดการเส้นทาง API สำหรับข้อมูลและสถานะของร้านค้า
 const express = require('express');
 const router = express.Router();
 

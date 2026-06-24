@@ -1,3 +1,4 @@
+// : จัดการเส้นทาง API สำหรับข้อมูลส่วนตัวของผู้ใช้
 const express = require('express');
 const router = express.Router();
 const { auth } = require('../middleware/auth'); 

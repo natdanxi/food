@@ -1,3 +1,4 @@
+// จัดการเส้นทาง API สำหรับหมวดหมู่สินค้า
 const express = require('express');
 const router = express.Router();
 const categoryController = require('../controllers/category');

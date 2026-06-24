@@ -1,3 +1,4 @@
+    // จัดการเส้นทาง API ฝั่งลูกค้า/หน้าร้าน สำหรับการสั่งซื้อออเดอร์
     const express = require('express');
     const router = express.Router();
     const { auth } = require('../middleware/auth');
