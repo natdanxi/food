@@ -21,16 +21,19 @@ const upload = multer({ storage }).single('slip');
 /**
  * 🟢 สร้างคำสั่งซื้อใหม่ (ฝั่งลูกค้า)
  */
-/**
- * 🟢 สร้างคำสั่งซื้อใหม่ (ฝั่งลูกค้า)
- */
 exports.createOrder = async (req, res) => {
     // ใช้ upload middleware เพื่อรองรับการส่ง FormData (มีไฟล์รูป)
     upload(req, res, async (err) => {
-        // ✅ เพิ่ม console.error เพื่อดูว่าถ้าอัปโหลดพัง มันพังเพราะอะไร
+        
+        // ✅ ตรวจสอบ Error จาก Multer
         if (err) {
-            console.error("Multer Error:", err); 
-            return res.status(400).json({ message: "อัปโหลดสลิปไม่สำเร็จ" });
+            // อนุญาตให้ผ่านได้ หากลูกค้าเลือกชำระแบบเงินสด (ไม่ต้องใช้สลิป)
+            if (req.body && req.body.paymentMethod === 'cash') {
+                // ปล่อยผ่านไปทำงานต่อใน try-catch
+            } else {
+                console.error("Multer Error:", err); 
+                return res.status(400).json({ message: "อัปโหลดสลิปไม่สำเร็จ กรุณาลองใหม่อีกครั้ง" });
+            }
         }
 
         try {
@@ -38,7 +41,7 @@ exports.createOrder = async (req, res) => {
             
             if (!items) return res.status(400).json({ message: "ไม่พบรายการอาหาร" });
 
-            // ✅ เพิ่มการเช็คว่า ถ้าเลือกโอนเงิน (transfer) แต่ไม่มีไฟล์สลิปส่งมา ให้ตีกลับ
+            // ✅ เช็คอีกรอบ: ถ้าเลือกโอนเงิน (transfer) แต่ไม่มีไฟล์สลิปส่งมา ให้ตีกลับ
             if (paymentMethod === 'transfer' && !req.file) {
                 return res.status(400).json({ message: "กรุณาแนบสลิปโอนเงิน" });
             }
@@ -75,7 +78,7 @@ exports.createOrder = async (req, res) => {
                 }
             });
 
-            // 7. ถ้าโอนเงิน ให้สร้างข้อมูล Payment ด้วย
+            // 7. ถ้าโอนเงิน ให้สร้างข้อมูล Payment เพื่อเก็บรูปสลิป
             if (paymentMethod === 'transfer' && req.file) {
                 await prisma.payment.create({
                     data: {
